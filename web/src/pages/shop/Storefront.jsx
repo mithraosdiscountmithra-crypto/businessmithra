@@ -39,9 +39,40 @@ function Sheet({ title, onClose, children }) {
   );
 }
 
-function ItemCard({ it, qty, color, onAdd, onDec, onBook, onAsk, onOpen }) {
+const keyOf = (itemId, variantId) => (variantId ? `${itemId}:${variantId}` : itemId);
+
+function VariantChips({ it, value, onChange, color }) {
+  return (
+    <div className="flex flex-wrap gap-1.5" role="group" aria-label={`${it.name} size`}>
+      {it.variants.map((v) => (
+        <button
+          key={v.id}
+          type="button"
+          aria-pressed={value === v.id}
+          disabled={!v.inStock}
+          onClick={() => onChange(v.id)}
+          className="min-h-[32px] px-2.5 rounded-lg text-xs font-bold border disabled:opacity-40 disabled:line-through"
+          style={value === v.id ? { background: color, color: '#fff', borderColor: color } : { background: '#fff', borderColor: '#D1D5DB' }}
+        >
+          {v.name}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+const firstInStock = (it) => (it.variants.find((v) => v.inStock) || it.variants[0])?.id || null;
+
+function ItemCard({ it, cart, color, onAdd, onDec, onBook, onAsk, onOpen }) {
+  const [vSel, setVSel] = useState(() => firstInStock(it));
+  const v = it.variants.find((x) => x.id === vSel) || null;
+  const price = v ? v.price : it.price;
+  const mrp = v ? v.mrp : it.mrp;
+  const key = keyOf(it.id, v?.id);
+  const qty = cart[key] || 0;
+  const available = it.inStock && (!v || v.inStock);
   const img = it.images[0];
-  const off = it.mrp && it.mrp > it.price ? Math.round(((it.mrp - it.price) / it.mrp) * 100) : 0;
+  const off = mrp && mrp > price ? Math.round(((mrp - price) / mrp) * 100) : 0;
   return (
     <article className="bg-white rounded-2xl border border-gray-200 overflow-hidden flex flex-col">
       <button type="button" onClick={onOpen} className="relative aspect-square bg-gray-100 block w-full" aria-label={`View ${it.name}`}>
@@ -51,23 +82,24 @@ function ItemCard({ it, qty, color, onAdd, onDec, onBook, onAsk, onOpen }) {
       </button>
       <div className="p-3 flex flex-col gap-1.5 flex-1">
         <h3 className="text-sm font-bold leading-snug line-clamp-2">{it.name}</h3>
+        {it.variants.length > 0 && <VariantChips it={it} value={vSel} onChange={setVSel} color={color} />}
         <div className="flex items-baseline gap-2">
-          <span className="font-extrabold">{inr(it.price)}</span>
-          {off > 0 && <span className="text-xs text-gray-500 line-through">{inr(it.mrp)}</span>}
+          <span className="font-extrabold">{inr(price)}</span>
+          {off > 0 && <span className="text-xs text-gray-500 line-through">{inr(mrp)}</span>}
         </div>
         <div className="mt-auto pt-1 flex gap-1.5">
           {it.type === 'service' && onBook ? (
             <button type="button" onClick={onBook} className="flex-1 h-10 rounded-xl text-white text-sm font-bold" style={{ background: color }}>Book</button>
-          ) : !it.inStock ? (
+          ) : !available ? (
             <button type="button" onClick={onAsk} className="flex-1 h-10 rounded-xl border border-gray-300 text-sm font-bold">Ask</button>
           ) : qty > 0 ? (
             <div className="flex-1 flex items-center justify-between h-10 rounded-xl text-white font-bold" style={{ background: color }}>
-              <button type="button" aria-label={`Remove one ${it.name}`} onClick={onDec} className="w-10 h-10 text-xl">−</button>
+              <button type="button" aria-label={`Remove one ${it.name}`} onClick={() => onDec(key)} className="w-10 h-10 text-xl">−</button>
               <span aria-live="polite">{qty}</span>
-              <button type="button" aria-label={`Add one more ${it.name}`} onClick={onAdd} className="w-10 h-10 text-xl">+</button>
+              <button type="button" aria-label={`Add one more ${it.name}`} onClick={() => onAdd(key)} className="w-10 h-10 text-xl">+</button>
             </div>
           ) : (
-            <button type="button" onClick={onAdd} className="flex-1 h-10 rounded-xl text-white text-sm font-bold" style={{ background: color }}>Add</button>
+            <button type="button" onClick={() => onAdd(key)} className="flex-1 h-10 rounded-xl text-white text-sm font-bold" style={{ background: color }}>Add</button>
           )}
         </div>
       </div>
@@ -112,9 +144,17 @@ export default function Storefront() {
   const byId = useMemo(() => Object.fromEntries(items.map((i) => [i.id, i])), [items]);
   const categories = useMemo(() => [...new Set(items.map((i) => i.category).filter(Boolean))], [items]);
   const shown = items.filter((i) => (!cat || i.category === cat) && (!q || i.name.toLowerCase().includes(q.toLowerCase())));
-  const cartLines = Object.entries(cart).filter(([id, n]) => byId[id] && n > 0).map(([id, n]) => ({ item: byId[id], qty: n }));
+  const cartLines = Object.entries(cart).flatMap(([key, n]) => {
+    const [id, vId] = key.split(':');
+    const it = byId[id];
+    if (!it || !(n > 0)) return [];
+    const v = vId ? it.variants.find((x) => x.id === vId) : null;
+    if (vId && !v) return [];
+    if (!vId && it.variants.length) return [];
+    return [{ key, item: it, variant: v, name: v ? `${it.name} (${v.name})` : it.name, price: v ? v.price : it.price, qty: n }];
+  });
   const cartCount = cartLines.reduce((a, l) => a + l.qty, 0);
-  const itemsTotal = cartLines.reduce((a, l) => a + l.item.price * l.qty, 0);
+  const itemsTotal = cartLines.reduce((a, l) => a + l.price * l.qty, 0);
   const fee = form.fulfilment === 'delivery' ? shop?.deliveryFee || 0 : 0;
 
   const add = (id) => setCart((c) => ({ ...c, [id]: (c[id] || 0) + 1 }));
@@ -185,7 +225,7 @@ export default function Storefront() {
         name: form.name, phone: form.phone, address: form.address, note: form.note,
         fulfilment: kind === 'booking' ? 'pickup' : form.fulfilment,
         preferredAt: form.preferredAt ? new Date(form.preferredAt).toISOString() : '',
-        items: kind === 'booking' ? [{ itemId: bookItem.id, qty: 1 }] : cartLines.map((l) => ({ itemId: l.item.id, qty: l.qty })),
+        items: kind === 'booking' ? [{ itemId: bookItem.id, variantId: firstInStock(bookItem), qty: 1 }] : cartLines.map((l) => ({ itemId: l.item.id, variantId: l.variant?.id || null, qty: l.qty })),
       };
       const r = await api(`/shop/${slug}/orders`, { method: 'POST', body });
       addOrderToken(slug, r.token);
@@ -276,8 +316,8 @@ export default function Storefront() {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             {shown.map((it) => (
               <ItemCard
-                key={it.id} it={it} qty={cart[it.id] || 0} color={color}
-                onAdd={() => add(it.id)} onDec={() => dec(it.id)}
+                key={it.id} it={it} cart={cart} color={color}
+                onAdd={add} onDec={dec}
                 onBook={shop.allowBooking ? () => setSheet({ type: 'book', item: it }) : null}
                 onAsk={() => { setSent(false); setSheet({ type: 'ask', item: it }); }}
                 onOpen={() => setSheet({ type: 'item', item: it })}
@@ -305,12 +345,26 @@ export default function Storefront() {
                 {sheet.item.images.map((src, i) => <img key={src + i} src={src} alt={`${sheet.item.name} photo ${i + 1}`} className="w-full max-w-[420px] aspect-square object-cover rounded-2xl snap-center shrink-0" />)}
               </div>
             )}
-            <p className="text-xl font-extrabold">{inr(sheet.item.price)} {sheet.item.mrp > sheet.item.price && <span className="text-sm text-gray-500 line-through font-normal">{inr(sheet.item.mrp)}</span>} <span className="text-xs text-muted font-normal">/ {sheet.item.unit}</span></p>
+            {sheet.item.variants.length > 0 ? (
+              <ul className="flex flex-col gap-2">
+                {sheet.item.variants.map((v) => (
+                  <li key={v.id} className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 p-3">
+                    <span className="font-semibold">{v.name}</span>
+                    <span className="ml-auto font-extrabold">{inr(v.price)} {v.mrp > v.price && <span className="text-xs text-gray-500 line-through font-normal">{inr(v.mrp)}</span>}</span>
+                    {v.inStock && sheet.item.inStock && (shop.allowPickup || shop.allowDelivery) && sheet.item.type !== 'service'
+                      ? <button type="button" className="h-10 px-4 rounded-xl text-white text-sm font-bold" style={{ background: color }} onClick={() => add(keyOf(sheet.item.id, v.id))}>{cart[keyOf(sheet.item.id, v.id)] ? `Added (${cart[keyOf(sheet.item.id, v.id)]}) +` : 'Add'}</button>
+                      : !v.inStock && <span className="text-xs font-bold text-gray-500">Out of stock</span>}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xl font-extrabold">{inr(sheet.item.price)} {sheet.item.mrp > sheet.item.price && <span className="text-sm text-gray-500 line-through font-normal">{inr(sheet.item.mrp)}</span>} <span className="text-xs text-muted font-normal">/ {sheet.item.unit}</span></p>
+            )}
             {sheet.item.description && <p className="text-sm text-gray-700 whitespace-pre-line">{sheet.item.description}</p>}
             <div className="flex gap-2">
               {sheet.item.type === 'service' && shop.allowBooking ? (
                 <button type="button" className="flex-1 h-12 rounded-xl text-white font-bold" style={{ background: color }} onClick={() => setSheet({ type: 'book', item: sheet.item })}>Book appointment</button>
-              ) : sheet.item.inStock && (shop.allowPickup || shop.allowDelivery) ? (
+              ) : sheet.item.inStock && !sheet.item.variants.length && (shop.allowPickup || shop.allowDelivery) ? (
                 <button type="button" className="flex-1 h-12 rounded-xl text-white font-bold" style={{ background: color }} onClick={() => { add(sheet.item.id); setSheet(null); }}>Add to cart</button>
               ) : null}
               <button type="button" className="flex-1 h-12 rounded-xl border border-gray-300 font-bold" onClick={() => { setSent(false); setSheet({ type: 'ask', item: sheet.item }); }}>Ask a question</button>
@@ -324,14 +378,14 @@ export default function Storefront() {
           <form onSubmit={(e) => placeOrder(e, 'order')} className="flex flex-col gap-4">
             <ul className="flex flex-col divide-y divide-gray-100">
               {cartLines.map((l) => (
-                <li key={l.item.id} className="flex items-center gap-3 py-2.5">
-                  <div className="flex-1 min-w-0"><p className="font-semibold text-sm truncate">{l.item.name}</p><p className="text-xs text-muted">{inr(l.item.price)} each</p></div>
+                <li key={l.key} className="flex items-center gap-3 py-2.5">
+                  <div className="flex-1 min-w-0"><p className="font-semibold text-sm truncate">{l.name}</p><p className="text-xs text-muted">{inr(l.price)} each</p></div>
                   <div className="flex items-center gap-1 border border-gray-300 rounded-xl">
-                    <button type="button" aria-label={`Remove one ${l.item.name}`} className="w-9 h-9 text-lg" onClick={() => dec(l.item.id)}>−</button>
+                    <button type="button" aria-label={`Remove one ${l.name}`} className="w-9 h-9 text-lg" onClick={() => dec(l.key)}>−</button>
                     <span className="w-6 text-center font-bold">{l.qty}</span>
-                    <button type="button" aria-label={`Add one ${l.item.name}`} className="w-9 h-9 text-lg" onClick={() => add(l.item.id)}>+</button>
+                    <button type="button" aria-label={`Add one ${l.name}`} className="w-9 h-9 text-lg" onClick={() => add(l.key)}>+</button>
                   </div>
-                  <span className="w-20 text-right font-bold">{inr(l.item.price * l.qty)}</span>
+                  <span className="w-20 text-right font-bold">{inr(l.price * l.qty)}</span>
                 </li>
               ))}
             </ul>

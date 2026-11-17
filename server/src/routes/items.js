@@ -25,6 +25,17 @@ const schema = z.object({
   images: z.array(z.string().trim().url().refine((v) => v.startsWith('https://'), 'Image link must start with https://')).max(6).default([]),
   showInShop: z.boolean().default(true),
   inStock: z.boolean().default(true),
+  variants: z.array(z.object({
+    id: z.string().trim().min(1).max(24),
+    name: z.string().trim().min(1, 'Enter each size/variant name').max(40),
+    price: z.coerce.number().min(0, 'Price cannot be negative'),
+    mrp: z.coerce.number().min(0).optional().nullable().transform((v) => (v ? v : null)),
+    inStock: z.boolean().default(true),
+  })).max(20).default([]),
+}).transform((d) => {
+  // With variants, the item's own price = cheapest variant (used in lists).
+  if (d.variants.length) d.price = Math.min(...d.variants.map((v) => v.price));
+  return d;
 });
 
 router.get('/', requirePermission('sales', 'view'), h(async (req, res) => {

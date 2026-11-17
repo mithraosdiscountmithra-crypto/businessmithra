@@ -221,6 +221,7 @@ model Item {
   description String?
   category    String?
   images      String[] @default([])
+  variants    Json     @default("[]") // [{ id, name, price, mrp, inStock }] e.g. 250 g / 500 g / 1 kg, Half / Full
   showInShop  Boolean  @default(true)
   inStock     Boolean  @default(true)
   createdAt  DateTime @default(now())

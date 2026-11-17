@@ -46,6 +46,10 @@ router.get('/:slug', h(async (req, res) => {
     items: items.map((it) => ({
       id: it.id, name: it.name, type: it.type, unit: it.unit, description: it.description, category: it.category,
       images: it.images, inStock: it.inStock, price: priceWithTax(it), mrp: it.mrp ? num(it.mrp) : null,
+      variants: (Array.isArray(it.variants) ? it.variants : []).map((v) => ({
+        id: v.id, name: v.name, inStock: v.inStock !== false,
+        price: r2(num(v.price) * (1 + num(it.taxRate) / 100)), mrp: v.mrp ? num(v.mrp) : null,
+      })),
     })),
   });
 }));
@@ -59,7 +63,11 @@ const orderSchema = z.object({
   note: z.string().trim().max(500).optional().nullable().or(z.literal('')).transform((v) => v || null),
   fulfilment: z.enum(['pickup', 'delivery']).default('pickup'),
   preferredAt: z.string().optional().nullable().or(z.literal('')).transform((v) => (v ? new Date(v) : null)),
-  items: z.array(z.object({ itemId: z.string().min(1), qty: z.coerce.number().positive().max(10000) })).min(1, 'Your cart is empty').max(100),
+  items: z.array(z.object({
+    itemId: z.string().min(1),
+    variantId: z.string().max(24).optional().nullable(),
+    qty: z.coerce.number().positive().max(10000),
+  })).min(1, 'Your cart is empty').max(100),
 });
 
 async function findOrCreateCustomer(businessId, name, phoneNo, address) {
@@ -91,6 +99,13 @@ router.post('/:slug/orders', writeLimiter, h(async (req, res) => {
     const it = byId[l.itemId];
     if (!it) throw new HttpError(400, 'Some items in your cart are no longer available. Please refresh.');
     if (!it.inStock) throw new HttpError(400, `${it.name} is out of stock`);
+    const variants = Array.isArray(it.variants) ? it.variants : [];
+    if (variants.length) {
+      const v = variants.find((x) => x.id === l.variantId);
+      if (!v) throw new HttpError(400, `Please choose a size for ${it.name}`);
+      if (v.inStock === false) throw new HttpError(400, `${it.name} (${v.name}) is out of stock`);
+      return { itemId: it.id, name: `${it.name} (${v.name})`, hsn: it.hsn, unit: it.unit, qty: l.qty, rate: num(v.price), taxRate: num(it.taxRate) };
+    }
     return { itemId: it.id, name: it.name, hsn: it.hsn, unit: it.unit, qty: l.qty, rate: num(it.price), taxRate: num(it.taxRate) };
   });
   const c = computeDoc({ items: lines, discount: 0, interState: false });

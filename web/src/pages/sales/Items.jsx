@@ -12,7 +12,12 @@ function ItemForm({ item, onClose, onSaved }) {
     unit: item?.unit || 'pcs', price: item?.price ?? '', taxRate: item?.taxRate ?? 5,
     mrp: item?.mrp ?? '', description: item?.description || '', category: item?.category || '',
     images: item?.images || [], showInShop: item?.showInShop ?? true, inStock: item?.inStock ?? true,
+    variants: (item?.variants || []).map((v) => ({ ...v, mrp: v.mrp ?? '' })),
   });
+  const vid = () => Math.random().toString(36).slice(2, 10);
+  const setVariants = (variants) => setF((x) => ({ ...x, variants }));
+  const setV = (id, patch) => setVariants(f.variants.map((v) => (v.id === id ? { ...v, ...patch } : v)));
+  const preset = (names) => setVariants([...f.variants, ...names.map((name) => ({ id: vid(), name, price: '', mrp: '', inStock: true }))]);
   const setImages = (images) => setF((x) => ({ ...x, images }));
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
@@ -21,7 +26,10 @@ function ItemForm({ item, onClose, onSaved }) {
     setErr('');
     setBusy(true);
     try {
-      await api(item ? `/items/${item.id}` : '/items', { method: item ? 'PUT' : 'POST', body: { ...f, price: Number(f.price || 0), taxRate: Number(f.taxRate), mrp: f.mrp === '' ? null : Number(f.mrp), active: true } });
+      await api(item ? `/items/${item.id}` : '/items', { method: item ? 'PUT' : 'POST', body: {
+        ...f, price: Number(f.price || 0), taxRate: Number(f.taxRate), mrp: f.mrp === '' ? null : Number(f.mrp), active: true,
+        variants: f.variants.filter((v) => v.name.trim()).map((v) => ({ ...v, price: Number(v.price || 0), mrp: v.mrp === '' ? null : Number(v.mrp) })),
+      } });
       onSaved();
     } catch (x) {
       setErr(x.message);
@@ -43,12 +51,38 @@ function ItemForm({ item, onClose, onSaved }) {
               {['pcs', 'nos', 'kg', 'g', 'ltr', 'mtr', 'box', 'set', 'pair', 'hrs', 'job'].map((u) => <option key={u}>{u}</option>)}
             </select>
           </Field>
-          <Field label="Price (₹, before GST)" id="i-price"><input id="i-price" type="number" min="0" step="0.01" required className="input" value={f.price} onChange={set('price')} /></Field>
+          <Field label="Price (₹, before GST)" id="i-price"><input id="i-price" type="number" min="0" step="0.01" required={f.variants.length === 0} disabled={f.variants.length > 0} className="input disabled:bg-gray-100" value={f.variants.length ? '' : f.price} placeholder={f.variants.length ? 'Sizes lo set cheyyandi' : ''} onChange={set('price')} /></Field>
           <Field label="GST %" id="i-tax">
             <select id="i-tax" className="input" value={f.taxRate} onChange={set('taxRate')}>{GST_RATES.map((r) => <option key={r} value={r}>{r}%</option>)}</select>
           </Field>
           <Field label={f.type === 'service' ? 'SAC code' : 'HSN code'} id="i-hsn"><input id="i-hsn" className="input" value={f.hsn} onChange={set('hsn')} /></Field>
           <Field label="SKU / Code" id="i-sku"><input id="i-sku" className="input" value={f.sku} onChange={set('sku')} /></Field>
+        </div>
+        <div className="flex flex-col gap-3 pt-2 border-t border-line">
+          <div>
+            <h3 className="font-bold">Sizes / quantities (optional)</h3>
+            <p className="text-xs text-muted">Veru veru price unte add cheyyandi: 250g / 500g / 1kg, Half / Full, S / M / L. Prices GST lekunda.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {[['250 g', '500 g', '1 kg'], ['Half', 'Full'], ['500 ml', '1 L'], ['S', 'M', 'L', 'XL'], ['Small', 'Medium', 'Large']].map((p) => (
+              <button key={p.join()} type="button" className="h-9 px-3 rounded-lg border border-line text-sm font-semibold hover:border-brand" onClick={() => preset(p)}>+ {p.join(' / ')}</button>
+            ))}
+            <button type="button" className="h-9 px-3 rounded-lg border border-line text-sm font-semibold hover:border-brand" onClick={() => preset([''])}>+ Custom</button>
+          </div>
+          {f.variants.length > 0 && (
+            <div className="flex flex-col gap-2">
+              {f.variants.map((v, i) => (
+                <div key={v.id} className="grid grid-cols-12 gap-2 items-end">
+                  <Field label={i === 0 ? 'Size' : ''} id={`v-n-${v.id}`} className="col-span-4"><input id={`v-n-${v.id}`} aria-label="Size name" className="input" value={v.name} onChange={(e) => setV(v.id, { name: e.target.value })} placeholder="e.g. 1 kg" /></Field>
+                  <Field label={i === 0 ? 'Price ₹' : ''} id={`v-p-${v.id}`} className="col-span-3"><input id={`v-p-${v.id}`} aria-label="Price" type="number" min="0" step="0.01" required className="input px-2" value={v.price} onChange={(e) => setV(v.id, { price: e.target.value })} /></Field>
+                  <Field label={i === 0 ? 'MRP ₹' : ''} id={`v-m-${v.id}`} className="col-span-2"><input id={`v-m-${v.id}`} aria-label="MRP" type="number" min="0" step="0.01" className="input px-2" value={v.mrp} onChange={(e) => setV(v.id, { mrp: e.target.value })} /></Field>
+                  <label className="col-span-2 flex items-center gap-1.5 text-xs font-semibold h-11"><input type="checkbox" className="w-5 h-5 accent-brand" checked={v.inStock} onChange={(e) => setV(v.id, { inStock: e.target.checked })} /> Stock</label>
+                  <button type="button" aria-label={`Remove ${v.name || 'size'}`} className="col-span-1 h-11 rounded-xl text-red-700 hover:bg-red-50 font-bold text-lg" onClick={() => setVariants(f.variants.filter((x) => x.id !== v.id))}>×</button>
+                </div>
+              ))}
+              <p className="text-xs text-muted">Sizes unte paina "Price" kakunda, ikkada prati size ki price vaadataru.</p>
+            </div>
+          )}
         </div>
         <h3 className="font-bold pt-2 border-t border-line">Online shop</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -112,7 +146,7 @@ export default function Items() {
                   </td>
                   <td className="p-3 capitalize">{it.type}</td>
                   <td className="p-3">{it.hsn || '—'}</td>
-                  <td className="p-3 text-right font-semibold">{inr(it.price)} / {it.unit}</td>
+                  <td className="p-3 text-right font-semibold">{it.variants?.length ? <>from {inr(it.price)}<span className="block text-xs text-muted font-normal">{it.variants.map((v) => v.name).join(' · ')}</span></> : <>{inr(it.price)} / {it.unit}</>}</td>
                   <td className="p-3 text-right">{Number(it.taxRate)}%</td>
                   <td className="p-3 text-right whitespace-nowrap">
                     {can.edit && <button type="button" className="btn-ghost h-9 px-3" onClick={() => setEditing(it)}>Edit</button>}

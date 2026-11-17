@@ -70,10 +70,13 @@ export default function DocEditor({ kind }) {
   const customer = (customers.data?.customers || []).find((c) => c.id === f.customerId);
 
   const setLine = (key, patch) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
-  const pickItem = (key, itemId) => {
-    const it = (items.data?.items || []).find((x) => x.id === itemId);
-    if (!it) return setLine(key, { itemId: '' });
-    setLine(key, { itemId, name: it.name, hsn: it.hsn || '', unit: it.unit, rate: Number(it.price), taxRate: Number(it.taxRate) });
+  const options = useMemo(() => (items.data?.items || []).flatMap((it) => (it.variants?.length
+    ? it.variants.map((v) => ({ value: `${it.id}|${v.id}`, label: `${it.name} – ${v.name}`, it, name: `${it.name} (${v.name})`, rate: Number(v.price) }))
+    : [{ value: it.id, label: it.name, it, name: it.name, rate: Number(it.price) }])), [items.data]);
+  const pickItem = (key, value) => {
+    const o = options.find((x) => x.value === value);
+    if (!o) return setLine(key, { itemId: '', pick: '' });
+    setLine(key, { itemId: o.it.id, pick: value, name: o.name, hsn: o.it.hsn || '', unit: o.it.unit, rate: o.rate, taxRate: Number(o.it.taxRate) });
   };
 
   const save = async (e) => {
@@ -84,7 +87,7 @@ export default function DocEditor({ kind }) {
       const body = {
         ...f,
         discount: Number(f.discount) || 0,
-        items: lines.filter((l) => l.name.trim()).map(({ key, ...l }) => ({ ...l, itemId: l.itemId || null, qty: Number(l.qty), rate: Number(l.rate) || 0, taxRate: Number(l.taxRate) })),
+        items: lines.filter((l) => l.name.trim()).map(({ key, pick, ...l }) => ({ ...l, itemId: l.itemId || null, qty: Number(l.qty), rate: Number(l.rate) || 0, taxRate: Number(l.taxRate) })),
       };
       if (isInvoice && !id && paidNow.on) {
         body.paidNow = { amount: Number(paidNow.amount) || t.total, mode: paidNow.mode, accountId: paidNow.accountId || null, date: f.date };
@@ -139,9 +142,9 @@ export default function DocEditor({ kind }) {
           {lines.map((l, i) => (
             <div key={l.key} className="grid grid-cols-2 md:grid-cols-12 gap-2.5 items-end border border-gray-100 rounded-xl p-3">
               <Field label={`Item ${i + 1}`} id={`li-${l.key}`} className="col-span-2 md:col-span-4">
-                <select className="input mb-2" aria-label="Pick from items list" value={l.itemId} onChange={(e) => pickItem(l.key, e.target.value)}>
+                <select className="input mb-2" aria-label="Pick from items list" value={l.pick ?? l.itemId} onChange={(e) => pickItem(l.key, e.target.value)}>
                   <option value="">Type below or pick from list</option>
-                  {(items.data?.items || []).map((it) => <option key={it.id} value={it.id}>{it.name}</option>)}
+                  {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
                 <input id={`li-${l.key}`} className="input" placeholder="Item / service name" value={l.name} onChange={(e) => setLine(l.key, { name: e.target.value })} />
               </Field>
