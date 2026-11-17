@@ -16,7 +16,9 @@ import { addRenderDomain, autoDomainConfig, removeRenderDomain, setHostingerDns,
 const router = Router();
 const COOKIE = 'bm_admin';
 
-const configured = () => Boolean(process.env.SUPERADMIN_EMAIL && process.env.SUPERADMIN_PASSWORD && process.env.SUPERADMIN_PASSWORD.length >= 10);
+// Extra spaces copied into Render by mistake are ignored.
+const envPass = () => String(process.env.SUPERADMIN_PASSWORD || '').trim();
+const configured = () => Boolean(String(process.env.SUPERADMIN_EMAIL || '').trim() && envPass().length >= 10);
 const same = (a, b) => {
   const x = crypto.createHash('sha256').update(String(a)).digest();
   const y = crypto.createHash('sha256').update(String(b)).digest();
@@ -28,8 +30,8 @@ const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHe
 router.post('/login', loginLimiter, h(async (req, res) => {
   if (!configured()) throw new HttpError(400, 'Super admin login is not set up. Add SUPERADMIN_EMAIL and SUPERADMIN_PASSWORD (min 10 characters) on Render.');
   const email = String(req.body?.email || '').trim().toLowerCase();
-  const password = String(req.body?.password || '');
-  const ok = same(email, process.env.SUPERADMIN_EMAIL.trim().toLowerCase()) & same(password, process.env.SUPERADMIN_PASSWORD);
+  const password = String(req.body?.password || '').trim();
+  const ok = same(email, process.env.SUPERADMIN_EMAIL.trim().toLowerCase()) & same(password, envPass());
   if (!ok) throw new HttpError(401, 'Wrong email or password');
   const token = jwt.sign({ sa: true }, process.env.JWT_SECRET, { expiresIn: '12h', audience: 'admin' });
   res.cookie(COOKIE, token, { httpOnly: true, sameSite: 'strict', secure: process.env.NODE_ENV === 'production', maxAge: 12 * 3600000, path: '/' });
