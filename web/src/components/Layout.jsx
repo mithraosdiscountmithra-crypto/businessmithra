@@ -24,7 +24,7 @@ function Sidebar({ onNavigate }) {
   };
 
   return (
-    <nav aria-label="Main menu" className="h-full flex flex-col gap-1 p-4 bg-navy text-navy-200">
+    <nav aria-label="Main menu" className="h-full overflow-y-auto flex flex-col gap-1 p-4 bg-navy text-navy-200">
       <div className="flex items-center gap-2.5 px-2 pt-1 pb-5">
         <span className="w-10 h-10 rounded-xl bg-accent text-white flex items-center justify-center font-extrabold text-lg">B</span>
         <div className="flex flex-col">
@@ -91,7 +91,7 @@ function Sidebar({ onNavigate }) {
           </div>
         )}
         <button type="button" onClick={doLogout} className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-navy-200 hover:bg-white/5 hover:text-white">
-          <Icon name="logout" /> Logout
+          <Icon name="logout" /> {t('Logout')}
         </button>
       </div>
     </nav>
@@ -99,7 +99,13 @@ function Sidebar({ onNavigate }) {
 }
 
 export default function Layout({ children }) {
-  const { me } = useAuth();
+  const { me, logout } = useAuth();
+  const navigate = useNavigate();
+  const doLogout = async () => {
+    if (!window.confirm('Logout cheyyala?')) return;
+    await logout();
+    navigate('/login');
+  };
   const [open, setOpen] = useState(false);
   const sub = me.subscription;
   const warn = sub && sub.active && sub.daysLeft !== null && sub.daysLeft <= 5;
@@ -124,7 +130,8 @@ export default function Layout({ children }) {
           <button type="button" aria-label="Open menu" onClick={() => setOpen(true)} className="w-11 h-11 -ml-2 flex items-center justify-center rounded-xl">
             <Icon name="menu" size={22} />
           </button>
-          <span className="font-extrabold">BusinessMithra</span>
+          <span className="font-extrabold flex-1">BusinessMithra</span>
+          <button type="button" onClick={doLogout} className="h-10 px-3 rounded-xl text-sm font-semibold bg-white/10 flex items-center gap-1.5"><Icon name="logout" size={18} /> {t('Logout')}</button>
         </header>
         <header className="hidden lg:flex print:!hidden items-center justify-end gap-3 px-8 pt-6">
           <div className="flex items-center gap-3">
@@ -135,6 +142,7 @@ export default function Layout({ children }) {
               <span className="text-sm font-bold">{me.user.name}</span>
               <span className="text-xs text-muted">{me.business.name} · {me.user.role}</span>
             </div>
+            <button type="button" onClick={doLogout} className="btn-ghost h-10 px-3 ml-2"><Icon name="logout" size={18} /> {t('Logout')}</button>
           </div>
         </header>
         <main className="flex-1 px-4 py-6 lg:px-8 lg:py-6 max-w-6xl w-full print:p-0 print:max-w-none">
