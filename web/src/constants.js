@@ -2,7 +2,7 @@ export const MODULE_INFO = {
   sales: { label: 'Sales & Customers', icon: 'sales', phase: 'Live', path: '/sales/leads', base: '/sales', desc: 'Leads, customers, follow-ups, quotations, GST invoices' },
   marketing: { label: 'Marketing', icon: 'marketing', phase: 'Phase 5', desc: 'WhatsApp campaigns, offers, coupons, auto wishes' },
   accounts: { label: 'Accounts', icon: 'accounts', phase: 'Live', path: '/accounts', base: '/accounts', desc: 'Expenses, day book, GST, Profit & Loss' },
-  operations: { label: 'Operations', icon: 'operations', phase: 'Phase 3', desc: 'Stock, suppliers, purchase orders, tasks' },
+  operations: { label: 'Operations', icon: 'operations', phase: 'Live', path: '/ops/stock', base: '/ops', desc: 'Stock, suppliers, purchases, returns' },
   hr: { label: 'HR & Staff', icon: 'hr', phase: 'Phase 4', desc: 'Employees, attendance, leaves, payroll' },
   rnd: { label: 'R&D', icon: 'rnd', phase: 'Phase 6', desc: 'Ideas, new product projects, customer feedback' },
   management: { label: 'Reports', icon: 'reports', phase: 'Phase 6', desc: 'Owner reports, targets, approvals' },

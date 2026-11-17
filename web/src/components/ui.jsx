@@ -66,6 +66,7 @@ export const SALES_NAV = [
   { to: '/sales/followups', label: 'Follow-ups' },
   { to: '/sales/quotations', label: 'Quotations' },
   { to: '/sales/invoices', label: 'Invoices' },
+  { to: '/sales/returns', label: 'Returns' },
   { to: '/sales/items', label: 'Items & Services' },
   { to: '/sales/reports', label: 'Reports' },
 ];
@@ -75,6 +76,13 @@ export const ACCOUNTS_NAV = [
   { to: '/accounts/expenses', label: 'Expenses' },
   { to: '/accounts/daybook', label: 'Day Book' },
   { to: '/accounts/reports', label: 'P&L · GST · Cash flow' },
+];
+
+export const OPS_NAV = [
+  { to: '/ops/stock', label: 'Stock' },
+  { to: '/ops/purchases', label: 'Purchases' },
+  { to: '/ops/purchase-returns', label: 'Purchase Returns' },
+  { to: '/ops/suppliers', label: 'Suppliers' },
 ];
 
 export function Modal({ title, onClose, children, wide = false }) {

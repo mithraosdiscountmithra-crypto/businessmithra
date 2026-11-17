@@ -6,6 +6,7 @@ import { Badge, ErrorBox, Field, Modal, invoiceDisplayStatus, useApi } from '../
 import InvoicePaper from '../../components/InvoicePaper.jsx';
 import { fmtDate, inr, inrExact, MODE_LABEL, today, waLink } from '../../lib/format.js';
 import { downloadBillPdf, shareBillPdf } from '../../lib/billPdf.js';
+import { ReturnForm } from './Returns.jsx';
 
 function PaymentForm({ invoice, onClose, onSaved }) {
   const { me } = useAuth();
@@ -60,6 +61,7 @@ export default function InvoiceView() {
   const can = me.permissions.sales;
   const { data, error, setData } = useApi(`/invoices/${id}`);
   const [paying, setPaying] = useState(false);
+  const [returning, setReturning] = useState(false);
   const wa = useApi('/invoices/wa-config');
   const [sent, setSent] = useState('');
   const [err, setErr] = useState('');
@@ -105,6 +107,7 @@ export default function InvoiceView() {
           <button type="button" className="btn-ghost" onClick={() => downloadBillPdf(inv, business).catch((x) => setErr(x.message))}>⬇️ PDF</button>
           <button type="button" className="btn-ghost" onClick={() => window.print()}>Print</button>
           {can.edit && inv.status !== 'cancelled' && <Link className="btn-ghost" to={`/sales/invoices/${inv.id}/edit`}>Edit</Link>}
+          {can.add && inv.status !== 'cancelled' && <button type="button" className="btn-ghost" onClick={() => setReturning(true)}>↩️ Return</button>}
           {can.delete && inv.status !== 'cancelled' && (
             <button type="button" className="btn-ghost text-red-700" onClick={() => window.confirm('Cancel this invoice? It will not count in sales.') && act(() => api(`/invoices/${inv.id}/cancel`, { method: 'POST' }))}>Cancel invoice</button>
           )}
@@ -132,6 +135,7 @@ export default function InvoiceView() {
       <InvoicePaper doc={inv} business={business} kind="invoice" />
       <p className="text-xs text-muted print:hidden">Customer link: <a className="text-brand break-all" href={shareUrl} target="_blank" rel="noreferrer">{shareUrl}</a></p>
 
+      {returning && <ReturnForm invoice={inv} onClose={() => setReturning(false)} onSaved={() => { setReturning(false); api(`/invoices/${inv.id}`).then((r) => setData(r)).catch(() => {}); }} />}
       {paying && <PaymentForm invoice={inv} onClose={() => setPaying(false)} onSaved={(i) => { setPaying(false); setData({ ...data, invoice: i }); }} />}
     </div>
   );

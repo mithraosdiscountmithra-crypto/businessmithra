@@ -10,6 +10,7 @@ import { HttpError } from '../middleware/auth.js';
 import { otpEnabled, sendOtp, shopPhone, verifyOtp } from '../lib/otp.js';
 import { accessState, getPlans } from '../lib/plans.js';
 import { activeBenefits } from '../lib/membership.js';
+import { available } from '../lib/stock.js';
 
 const router = Router();
 
@@ -53,9 +54,9 @@ router.get('/:slug', h(async (req, res) => {
     memberPlans: memberPlans.map((p) => ({ id: p.id, name: p.name, price: num(p.price), durationDays: p.durationDays, discountPct: num(p.discountPct), freeDelivery: p.freeDelivery, description: p.description })),
     items: items.map((it) => ({
       id: it.id, name: it.name, type: it.type, unit: it.unit, description: it.description, category: it.category,
-      images: it.images, inStock: it.inStock, price: priceWithTax(it), mrp: it.mrp ? num(it.mrp) : null,
+      images: it.images, inStock: it.inStock && (!it.trackStock || num(it.stock) > 0), price: priceWithTax(it), mrp: it.mrp ? num(it.mrp) : null,
       variants: (Array.isArray(it.variants) ? it.variants : []).map((v) => ({
-        id: v.id, name: v.name, inStock: v.inStock !== false,
+        id: v.id, name: v.name, inStock: v.inStock !== false && (!it.trackStock || num(v.stock) > 0),
         price: r2(num(v.price) * (1 + num(it.taxRate) / 100)), mrp: v.mrp ? num(v.mrp) : null,
       })),
     })),
@@ -122,8 +123,12 @@ router.post('/:slug/orders', writeLimiter, h(async (req, res) => {
       const v = variants.find((x) => x.id === l.variantId);
       if (!v) throw new HttpError(400, `Please choose a size for ${it.name}`);
       if (v.inStock === false) throw new HttpError(400, `${it.name} (${v.name}) is out of stock`);
-      return { itemId: it.id, name: `${it.name} (${v.name})`, hsn: it.hsn, unit: it.unit, qty: l.qty, rate: num(v.price), taxRate: num(it.taxRate) };
+      const left = available(it, v.id);
+      if (left !== null && l.qty > left) throw new HttpError(400, left > 0 ? `Only ${left} left of ${it.name} (${v.name})` : `${it.name} (${v.name}) is out of stock`);
+      return { itemId: it.id, variantId: v.id, name: `${it.name} (${v.name})`, hsn: it.hsn, unit: it.unit, qty: l.qty, rate: num(v.price), taxRate: num(it.taxRate) };
     }
+    const left = available(it, null);
+    if (left !== null && l.qty > left) throw new HttpError(400, left > 0 ? `Only ${left} left of ${it.name}` : `${it.name} is out of stock`);
     return { itemId: it.id, name: it.name, hsn: it.hsn, unit: it.unit, qty: l.qty, rate: num(it.price), taxRate: num(it.taxRate) };
   });
   // Member benefits only for a mobile verified by OTP.

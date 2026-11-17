@@ -27,6 +27,7 @@ router.get('/', h(async (req, res) => {
     prisma.lead.groupBy({ by: ['source', 'stage'], where: { businessId: b, createdAt: { gte: r.gte, lt: r.lt } }, _count: true }),
   ]);
 
+  const returns = await prisma.creditNote.aggregate({ where: { businessId: b, date: { gte: r.gte, lt: r.lt } }, _sum: { total: true }, _count: true });
   const custIds = byCustomer.map((x) => x.customerId);
   const staffIds = byStaff.map((x) => x.createdById).filter(Boolean);
   const [custs, users] = await Promise.all([
@@ -72,6 +73,9 @@ router.get('/', h(async (req, res) => {
     range: { from: r.from, to: r.to },
     summary: {
       sales: r2(num(totals._sum.total)),
+      returns: r2(num(returns._sum.total)),
+      returnCount: returns._count,
+      netSales: r2(num(totals._sum.total) - num(returns._sum.total)),
       invoices: totals._count,
       taxableValue: r2(num(totals._sum.subtotal) - num(totals._sum.discount)),
       gst: r2(num(totals._sum.taxTotal)),

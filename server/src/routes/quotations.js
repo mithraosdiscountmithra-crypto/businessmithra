@@ -4,6 +4,7 @@ import { prisma, logActivity } from '../lib/prisma.js';
 import { h } from '../lib/route.js';
 import { computeDoc, dateOnly, docSchema, num } from '../lib/money.js';
 import { HttpError, requireAuth, requirePermission } from '../middleware/auth.js';
+import { applyLines } from '../lib/stock.js';
 
 const router = Router();
 router.use(requireAuth());
@@ -120,6 +121,7 @@ router.post('/:id/convert', requirePermission('sales', 'add'), h(async (req, res
         items: { create: c.lines },
       },
     });
+    await applyLines(tx, { businessId: req.businessId, refType: 'invoice', refId: created.id, lines: c.lines, sign: -1, reason: 'sale', userId: req.user.id });
     await tx.quotation.update({ where: { id: ex.id }, data: { status: 'converted', invoiceId: created.id } });
     return created;
   });

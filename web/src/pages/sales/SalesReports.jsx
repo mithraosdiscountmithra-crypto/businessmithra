@@ -20,7 +20,7 @@ export default function SalesReports() {
         <>
           <h2 className="hidden print:block text-lg font-bold">Sales report · {fmtDate(range.from)} – {fmtDate(range.to)}</h2>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <Stat label="Total sales" value={inr(s.sales)} sub={`${s.invoices} invoices`} />
+            <Stat label="Total sales" value={inr(s.sales)} sub={s.returns ? `${s.invoices} invoices · returns ${inr(s.returns)}` : `${s.invoices} invoices`} />
             <Stat label="Collected" value={inr(s.collected)} tone="text-green-800" />
             <Stat label="Average bill" value={inr(s.avgBill)} />
             <Stat label="Total pending (all time)" value={inr(s.totalDue)} tone={s.totalDue > 0 ? 'text-red-700' : ''} />

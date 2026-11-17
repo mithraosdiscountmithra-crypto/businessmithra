@@ -25,6 +25,10 @@ import shopAdminRoutes from './routes/shopAdmin.js';
 import billingRoutes from './routes/billing.js';
 import adminRoutes from './routes/admin.js';
 import membershipRoutes from './routes/memberships.js';
+import stockRoutes from './routes/stockRoutes.js';
+import supplierRoutes from './routes/suppliers.js';
+import purchaseRoutes from './routes/purchases.js';
+import creditNoteRoutes from './routes/creditNotes.js';
 import { Prisma } from '@prisma/client';
 import { prisma } from './lib/prisma.js';
 import { shopForHost } from './lib/domains.js';
@@ -91,6 +95,10 @@ app.use('/api/shop-admin', shopAdminRoutes);
 app.use('/api/billing', billingRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/memberships', membershipRoutes);
+app.use('/api/stock', stockRoutes);
+app.use('/api/suppliers', supplierRoutes);
+app.use('/api/purchases', purchaseRoutes);
+app.use('/api/credit-notes', creditNoteRoutes);
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
 
 // ── Google / WhatsApp friendly pages ──

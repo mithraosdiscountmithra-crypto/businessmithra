@@ -25,6 +25,7 @@ export const GST_RATES = [0, 0.1, 0.25, 3, 5, 12, 18, 28];
 
 export const lineSchema = z.object({
   itemId: z.string().optional().nullable(),
+  variantId: z.string().optional().nullable(),
   name: z.string().trim().min(1, 'Item name is required').max(200),
   hsn: z.string().trim().max(20).optional().nullable(),
   unit: z.string().trim().max(20).optional().nullable(),
@@ -54,6 +55,7 @@ export function computeDoc({ items, discount = 0, interState = false }) {
     const taxable = gross[i] * factor;
     return {
       itemId: l.itemId || null,
+      variantId: l.variantId || null,
       name: l.name,
       hsn: l.hsn || null,
       unit: l.unit || null,

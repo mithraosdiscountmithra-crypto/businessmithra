@@ -8,6 +8,7 @@ import { computeDoc, dateOnly, istToday, num } from '../lib/money.js';
 import { HttpError, requireAuth, requireOwner, requirePermission } from '../middleware/auth.js';
 import { defaultAccountId, MODES, recalcInvoice } from './invoices.js';
 import { clearDomainCache, normalizeDomain } from '../lib/domains.js';
+import { applyLines, reverseRef } from '../lib/stock.js';
 
 const router = Router();
 router.use(requireAuth());
@@ -136,14 +137,22 @@ router.put('/orders/:id/status', requirePermission('sales', 'edit'), h(async (re
   const status = String(req.body.status || '');
   if (!['new', 'confirmed', 'ready', 'completed', 'cancelled'].includes(status)) throw new HttpError(400, 'Invalid status');
   const o = await getOrder(req);
-  const u = await prisma.shopOrder.update({ where: { id: o.id }, data: { status, seenAt: o.seenAt || new Date() }, include });
+  const u = await prisma.$transaction(async (tx) => {
+    // Stock goes out when the shop confirms an order, and comes back if it is cancelled.
+    if (o.kind === 'order' && ['confirmed', 'ready', 'completed'].includes(status) && !o.invoiceId) {
+      const done = await tx.stockMove.count({ where: { refType: 'order', refId: o.id } });
+      if (!done) await applyLines(tx, { businessId: req.businessId, refType: 'order', refId: o.id, lines: o.items.map((i) => ({ ...i })), sign: -1, reason: 'order', userId: req.user.id });
+    }
+    if (status === 'cancelled') await reverseRef(tx, 'order', o.id);
+    return tx.shopOrder.update({ where: { id: o.id }, data: { status, seenAt: o.seenAt || new Date() }, include });
+  });
   await logActivity(req.businessId, req.user.id, `order_${status}`, 'shop_order', o.id);
   res.json({ order: u });
 }));
 
 // Turns the order into a GST invoice (and records the payment if already paid).
 async function makeInvoice(tx, req, o, payment) {
-  const items = o.items.map((i) => ({ itemId: i.itemId, name: i.name, hsn: i.hsn, unit: i.unit, qty: num(i.qty), rate: num(i.rate), taxRate: num(i.taxRate) }));
+  const items = o.items.map((i) => ({ itemId: i.itemId, variantId: i.variantId, name: i.name, hsn: i.hsn, unit: i.unit, qty: num(i.qty), rate: num(i.rate), taxRate: num(i.taxRate) }));
   if (num(o.deliveryFee) > 0) items.push({ name: 'Delivery charges', qty: 1, rate: num(o.deliveryFee), taxRate: 0 });
   const c = computeDoc({ items, discount: num(o.discount), interState: false });
   const b = await tx.business.update({ where: { id: req.businessId }, data: { nextInvoiceNo: { increment: 1 } } });
@@ -156,6 +165,9 @@ async function makeInvoice(tx, req, o, payment) {
       items: { create: c.lines },
     },
   });
+  const orderMoves = await tx.stockMove.count({ where: { refType: 'order', refId: o.id } });
+  if (orderMoves) await tx.stockMove.updateMany({ where: { refType: 'order', refId: o.id }, data: { note: `invoice:${inv.id}` } });
+  else await applyLines(tx, { businessId: req.businessId, refType: 'invoice', refId: inv.id, lines: c.lines, sign: -1, reason: 'sale', userId: req.user.id });
   if (payment) {
     const accountId = await defaultAccountId(tx, req.businessId, payment.mode);
     await tx.payment.create({

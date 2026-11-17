@@ -52,6 +52,7 @@ model Business {
   shopLng       Float?
   shopMapUrl    String?
   nextOrderNo   Int            @default(1)
+  nextCreditNo  Int            @default(1)
   membershipsEnabled Boolean   @default(false)
   customDomain       String?   // (unique, checked in code) vendor's own domain, e.g. www.srisaitextiles.in
   customDomainStatus String?   // requested, live
@@ -74,6 +75,10 @@ model Business {
   subscriptionRequests SubscriptionRequest[]
   membershipPlans MembershipPlan[]
   memberships     Membership[]
+  suppliers       Supplier[]
+  purchases       PurchaseBill[]
+  creditNotes     CreditNote[]
+  stockMoves      StockMove[]
 }
 
 model User {
@@ -170,6 +175,7 @@ model Customer {
   payments   Payment[]
   orders     ShopOrder[]
   memberships Membership[]
+  creditNotes CreditNote[]
 
   @@index([businessId, name])
   @@index([businessId, phone])
@@ -238,6 +244,12 @@ model Item {
   variants    Json     @default("[]") // [{ id, name, price, mrp, inStock }] e.g. 250 g / 500 g / 1 kg, Half / Full
   showInShop  Boolean  @default(true)
   inStock     Boolean  @default(true)
+  // Stock (Operations)
+  trackStock  Boolean  @default(false)
+  stock       Decimal  @default(0) @db.Decimal(12, 3)
+  lowStockAt  Decimal  @default(0) @db.Decimal(12, 3)
+  costPrice   Decimal  @default(0) @db.Decimal(12, 2)
+  barcode     String?
   createdAt  DateTime @default(now())
 
   @@index([businessId, name])
@@ -322,6 +334,7 @@ model InvoiceItem {
   invoiceId String
   invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   itemId    String?
+  variantId String?
   name      String
   hsn       String?
   unit      String?
@@ -348,6 +361,8 @@ model Payment {
   mode        String    @default("cash") // cash, upi, card, bank, cheque
   reference   String?
   notes       String?
+  refType     String?   // supplier_refund (money back from a supplier)
+  refId       String?
   createdById String?
   createdAt   DateTime  @default(now())
 
@@ -386,6 +401,8 @@ model Expense {
   account     Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
   mode        String   @default("cash")
   notes       String?
+  refType     String?  // supplier_payment, refund, salary (made automatically)
+  refId       String?
   createdById String?
   createdAt   DateTime @default(now())
 
@@ -436,6 +453,7 @@ model ShopOrderItem {
   orderId   String
   order     ShopOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
   itemId    String?
+  variantId String?
   name      String
   hsn       String?
   unit      String?
@@ -551,4 +569,128 @@ model Membership {
 
   @@index([businessId, status])
   @@index([businessId, phone])
+}
+
+// ───────────── OPERATIONS: stock, suppliers, purchases, returns ─────────────
+
+model StockMove {
+  id          String   @id @default(cuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  itemId      String
+  variantId   String?
+  qty         Decimal  @db.Decimal(12, 3) // + in, - out
+  reason      String   // opening, purchase, sale, order, return, purchase_return, adjust
+  refType     String?
+  refId       String?
+  note        String?
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@index([businessId, itemId, createdAt])
+  @@index([refType, refId])
+}
+
+model Supplier {
+  id         String         @id @default(cuid())
+  businessId String
+  business   Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name       String
+  phone      String?
+  gstin      String?
+  address    String?
+  notes      String?
+  createdAt  DateTime       @default(now())
+  bills      PurchaseBill[]
+
+  @@index([businessId, name])
+}
+
+model PurchaseBill {
+  id          String         @id @default(cuid())
+  businessId  String
+  business    Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  kind        String         @default("bill") // bill, return
+  supplierId  String
+  supplier    Supplier       @relation(fields: [supplierId], references: [id])
+  billNo      String?
+  date        DateTime
+  dueDate     DateTime?
+  interState  Boolean        @default(false)
+  subtotal    Decimal        @default(0) @db.Decimal(12, 2)
+  discount    Decimal        @default(0) @db.Decimal(12, 2)
+  taxTotal    Decimal        @default(0) @db.Decimal(12, 2)
+  cgst        Decimal        @default(0) @db.Decimal(12, 2)
+  sgst        Decimal        @default(0) @db.Decimal(12, 2)
+  igst        Decimal        @default(0) @db.Decimal(12, 2)
+  roundOff    Decimal        @default(0) @db.Decimal(12, 2)
+  total       Decimal        @default(0) @db.Decimal(12, 2)
+  amountPaid  Decimal        @default(0) @db.Decimal(12, 2)
+  status      String         @default("unpaid") // unpaid, partial, paid
+  notes       String?
+  createdById String?
+  createdAt   DateTime       @default(now())
+  items       PurchaseItem[]
+
+  @@index([businessId, date])
+}
+
+model PurchaseItem {
+  id        String       @id @default(cuid())
+  billId    String
+  bill      PurchaseBill @relation(fields: [billId], references: [id], onDelete: Cascade)
+  itemId    String?
+  variantId String?
+  name      String
+  hsn       String?
+  unit      String?
+  qty       Decimal      @db.Decimal(12, 3)
+  rate      Decimal      @db.Decimal(12, 2)
+  taxRate   Decimal      @db.Decimal(5, 2)
+  amount    Decimal      @db.Decimal(12, 2)
+  taxAmount Decimal      @db.Decimal(12, 2)
+  sort      Int          @default(0)
+}
+
+// Sales return (credit note)
+model CreditNote {
+  id          String           @id @default(cuid())
+  businessId  String
+  business    Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  number      String
+  invoiceId   String?
+  customerId  String
+  customer    Customer         @relation(fields: [customerId], references: [id])
+  date        DateTime
+  subtotal    Decimal          @default(0) @db.Decimal(12, 2)
+  taxTotal    Decimal          @default(0) @db.Decimal(12, 2)
+  cgst        Decimal          @default(0) @db.Decimal(12, 2)
+  sgst        Decimal          @default(0) @db.Decimal(12, 2)
+  igst        Decimal          @default(0) @db.Decimal(12, 2)
+  roundOff    Decimal          @default(0) @db.Decimal(12, 2)
+  total       Decimal          @default(0) @db.Decimal(12, 2)
+  settle      String           @default("refund") // refund, adjust, none
+  refundMode  String?
+  notes       String?
+  createdById String?
+  createdAt   DateTime         @default(now())
+  items       CreditNoteItem[]
+
+  @@index([businessId, date])
+  @@index([invoiceId])
+}
+
+model CreditNoteItem {
+  id           String     @id @default(cuid())
+  creditNoteId String
+  creditNote   CreditNote @relation(fields: [creditNoteId], references: [id], onDelete: Cascade)
+  itemId       String?
+  variantId    String?
+  name         String
+  hsn          String?
+  qty          Decimal    @db.Decimal(12, 3)
+  rate         Decimal    @db.Decimal(12, 2)
+  taxRate      Decimal    @db.Decimal(5, 2)
+  amount       Decimal    @db.Decimal(12, 2)
+  taxAmount    Decimal    @db.Decimal(12, 2)
 }

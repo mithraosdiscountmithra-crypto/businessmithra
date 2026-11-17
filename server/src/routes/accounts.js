@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma, logActivity } from '../lib/prisma.js';
 import { h } from '../lib/route.js';
+import { REAL_EXP, extraTotals } from '../lib/reports.js';
 import { addDays, dateOnly, num, parseRange, r2 } from '../lib/money.js';
 import { HttpError, requireAuth, requirePermission } from '../middleware/auth.js';
 import { defaultAccountId, MODES } from './invoices.js';
@@ -112,6 +113,7 @@ router.post('/expenses', requirePermission('accounts', 'add'), h(async (req, res
 router.put('/expenses/:id', requirePermission('accounts', 'edit'), h(async (req, res) => {
   const ex = await prisma.expense.findFirst({ where: { id: req.params.id, businessId: req.businessId } });
   if (!ex) throw new HttpError(404, 'Expense not found');
+  if (ex.refType) throw new HttpError(400, 'Ee entry auto ga vachindi (purchase / return / salary). Akkade marchandi.');
   const d = expenseSchema.parse(req.body);
   await checkAccount(req, d.accountId);
   const e = await prisma.expense.update({ where: { id: ex.id }, data: { ...d, accountId: d.accountId || ex.accountId, date: dateOnly(d.date) } });
@@ -122,6 +124,7 @@ router.put('/expenses/:id', requirePermission('accounts', 'edit'), h(async (req,
 router.delete('/expenses/:id', requirePermission('accounts', 'delete'), h(async (req, res) => {
   const ex = await prisma.expense.findFirst({ where: { id: req.params.id, businessId: req.businessId } });
   if (!ex) throw new HttpError(404, 'Expense not found');
+  if (ex.refType) throw new HttpError(400, 'Ee entry auto ga vachindi (purchase / return / salary). Akkade marchandi.');
   await prisma.expense.delete({ where: { id: ex.id } });
   await logActivity(req.businessId, req.user.id, 'delete', 'expense', ex.id);
   res.json({ ok: true });
@@ -147,7 +150,7 @@ router.get('/daybook', requirePermission('accounts', 'view'), h(async (req, res)
   const rows = [
     ...payments.map((p) => ({
       id: p.id, kind: 'in', date: p.date, createdAt: p.createdAt, amount: num(p.amount), mode: p.mode, account: p.account?.name || '—',
-      title: `Payment from ${p.customer?.name || 'customer'}`, ref: p.invoice?.number || p.reference || '', invoiceId: p.invoice?.id || null,
+      title: p.refType === 'supplier_refund' ? (p.notes || 'Refund from supplier') : `Payment from ${p.customer?.name || 'customer'}`, ref: p.invoice?.number || p.reference || '', invoiceId: p.invoice?.id || null,
     })),
     ...expenses.map((e) => ({
       id: e.id, kind: 'out', date: e.date, createdAt: e.createdAt, amount: num(e.amount), mode: e.mode, account: e.account?.name || '—',
@@ -175,8 +178,8 @@ router.get('/reports', requirePermission('accounts', 'view'), h(async (req, res)
       where: { invoice: live },
       select: { amount: true, taxRate: true, taxAmount: true, invoice: { select: { subtotal: true, discount: true, interState: true } } },
     }),
-    prisma.expense.aggregate({ where: { businessId: b, date: { gte: r.gte, lt: r.lt } }, _sum: { amount: true, taxAmount: true }, _count: true }),
-    prisma.expense.groupBy({ by: ['category'], where: { businessId: b, date: { gte: r.gte, lt: r.lt } }, _sum: { amount: true, taxAmount: true }, orderBy: { _sum: { amount: 'desc' } } }),
+    prisma.expense.aggregate({ where: { businessId: b, date: { gte: r.gte, lt: r.lt }, ...REAL_EXP }, _sum: { amount: true, taxAmount: true }, _count: true }),
+    prisma.expense.groupBy({ by: ['category'], where: { businessId: b, date: { gte: r.gte, lt: r.lt }, ...REAL_EXP }, _sum: { amount: true, taxAmount: true }, orderBy: { _sum: { amount: 'desc' } } }),
     prisma.payment.aggregate({ where: { businessId: b, date: { gte: r.gte, lt: r.lt } }, _sum: { amount: true } }),
     prisma.payment.groupBy({ by: ['mode'], where: { businessId: b, date: { gte: r.gte, lt: r.lt } }, _sum: { amount: true } }),
     prisma.expense.groupBy({ by: ['mode'], where: { businessId: b, date: { gte: r.gte, lt: r.lt } }, _sum: { amount: true } }),
@@ -185,11 +188,15 @@ router.get('/reports', requirePermission('accounts', 'view'), h(async (req, res)
       GROUP BY 1 ORDER BY 1`,
     prisma.$queryRaw`SELECT to_char("date", 'YYYY-MM') AS month, SUM("amount" - "taxAmount")::float AS expense
       FROM "Expense" WHERE "businessId" = ${b} AND "date" >= ${r.gte} AND "date" < ${r.lt}
+        AND ("refType" IS NULL OR "refType" NOT IN ('supplier_payment', 'refund'))
       GROUP BY 1 ORDER BY 1`,
   ]);
+  const ex = await extraTotals(b, r);
 
-  const income = r2(num(inv._sum.subtotal) - num(inv._sum.discount));
-  const expenses = r2(num(exp._sum.amount) - num(exp._sum.taxAmount));
+  const grossIncome = r2(num(inv._sum.subtotal) - num(inv._sum.discount));
+  const income = r2(grossIncome - ex.returnsTaxable);
+  const otherExpenses = r2(num(exp._sum.amount) - num(exp._sum.taxAmount));
+  const expenses = r2(otherExpenses + ex.purchasesTaxable);
 
   // GST output by rate (taxable value after discount share).
   const rates = {};
@@ -209,8 +216,8 @@ router.get('/reports', requirePermission('accounts', 'view'), h(async (req, res)
   const outputByRate = Object.values(rates)
     .map((x) => ({ rate: x.rate, taxable: r2(x.taxable), cgst: r2(x.cgst), sgst: r2(x.sgst), igst: r2(x.igst), total: r2(x.cgst + x.sgst + x.igst) }))
     .sort((a, b2) => a.rate - b2.rate);
-  const outputGst = r2(num(inv._sum.taxTotal));
-  const inputGst = r2(num(exp._sum.taxAmount));
+  const outputGst = r2(num(inv._sum.taxTotal) - ex.returnsTax);
+  const inputGst = r2(num(exp._sum.taxAmount) + ex.purchasesTax);
 
   const months = {};
   for (const m of monthlyInv) months[m.month] = { month: m.month, income: r2(m.income || 0), expense: 0 };
@@ -218,20 +225,29 @@ router.get('/reports', requirePermission('accounts', 'view'), h(async (req, res)
     months[m.month] ||= { month: m.month, income: 0, expense: 0 };
     months[m.month].expense = r2(m.expense || 0);
   }
+  for (const m of ex.monthly) {
+    months[m.month] ||= { month: m.month, income: 0, expense: 0 };
+    months[m.month].income = r2(months[m.month].income - (m.returns || 0));
+    months[m.month].expense = r2(months[m.month].expense + (m.purchases || 0));
+  }
 
   res.json({
     range: { from: r.from, to: r.to },
     pnl: {
       income, expenses, profit: r2(income - expenses),
+      grossSales: grossIncome, salesReturns: ex.returnsTaxable, purchases: ex.purchasesTaxable, otherExpenses,
       margin: income > 0 ? Math.round(((income - expenses) / income) * 100) : 0,
       invoices: inv._count, expenseEntries: exp._count,
-      byCategory: expByCat.map((c) => ({ category: c.category, amount: r2(num(c._sum.amount) - num(c._sum.taxAmount)) })),
+      byCategory: [
+        ...(ex.purchasesTaxable ? [{ category: 'Purchases (stock)', amount: ex.purchasesTaxable }] : []),
+        ...expByCat.map((c) => ({ category: c.category, amount: r2(num(c._sum.amount) - num(c._sum.taxAmount)) })),
+      ],
       monthly: Object.values(months).sort((a, b2) => a.month.localeCompare(b2.month)).map((m) => ({ ...m, profit: r2(m.income - m.expense) })),
     },
     gst: {
       outputGst, inputGst, netPayable: r2(outputGst - inputGst),
       cgst: r2(num(inv._sum.cgst)), sgst: r2(num(inv._sum.sgst)), igst: r2(num(inv._sum.igst)),
-      outputByRate,
+      outputByRate, returnsGst: ex.returnsTax, purchaseGst: ex.purchasesTax,
     },
     cashflow: {
       moneyIn: r2(num(payIn._sum.amount)),

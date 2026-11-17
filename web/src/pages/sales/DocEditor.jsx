@@ -58,7 +58,7 @@ export default function DocEditor({ kind }) {
           customerId: d.customerId, date: isoDay(d.date), dueDate: isoDay(d.dueDate), validTill: isoDay(d.validTill),
           interState: d.interState, discount: Number(d.discount) || '', notes: d.notes || '',
         });
-        setLines(d.items.map((l) => ({ key: l.id, itemId: l.itemId || '', name: l.name, hsn: l.hsn || '', unit: l.unit || 'pcs', qty: Number(l.qty), rate: Number(l.rate), taxRate: Number(l.taxRate) })));
+        setLines(d.items.map((l) => ({ key: l.id, itemId: l.itemId || '', variantId: l.variantId || '', pick: l.itemId ? (l.variantId ? `${l.itemId}|${l.variantId}` : l.itemId) : '', name: l.name, hsn: l.hsn || '', unit: l.unit || 'pcs', qty: Number(l.qty), rate: Number(l.rate), taxRate: Number(l.taxRate) })));
         setLoaded(true);
       } catch (x) {
         setErr(x.message);
@@ -77,12 +77,12 @@ export default function DocEditor({ kind }) {
 
   const setLine = (key, patch) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
   const options = useMemo(() => (items.data?.items || []).flatMap((it) => (it.variants?.length
-    ? it.variants.map((v) => ({ value: `${it.id}|${v.id}`, label: `${it.name} – ${v.name}`, it, name: `${it.name} (${v.name})`, rate: Number(v.price) }))
+    ? it.variants.map((v) => ({ value: `${it.id}|${v.id}`, variantId: v.id, label: `${it.name} – ${v.name}`, it, name: `${it.name} (${v.name})`, rate: Number(v.price) }))
     : [{ value: it.id, label: it.name, it, name: it.name, rate: Number(it.price) }])), [items.data]);
   const pickItem = (key, value) => {
     const o = options.find((x) => x.value === value);
-    if (!o) return setLine(key, { itemId: '', pick: '' });
-    setLine(key, { itemId: o.it.id, pick: value, name: o.name, hsn: o.it.hsn || '', unit: o.it.unit, rate: o.rate, taxRate: Number(o.it.taxRate) });
+    if (!o) return setLine(key, { itemId: '', variantId: '', pick: '' });
+    setLine(key, { itemId: o.it.id, variantId: o.variantId || '', pick: value, name: o.name, hsn: o.it.hsn || '', unit: o.it.unit, rate: o.rate, taxRate: Number(o.it.taxRate) });
   };
 
   const save = async (e) => {
@@ -93,7 +93,7 @@ export default function DocEditor({ kind }) {
       const body = {
         ...f,
         discount: Number(f.discount) || 0,
-        items: lines.filter((l) => l.name.trim()).map(({ key, pick, ...l }) => ({ ...l, itemId: l.itemId || null, qty: Number(l.qty), rate: Number(l.rate) || 0, taxRate: Number(l.taxRate) })),
+        items: lines.filter((l) => l.name.trim()).map(({ key, pick, ...l }) => ({ ...l, itemId: l.itemId || null, variantId: l.variantId || null, qty: Number(l.qty), rate: Number(l.rate) || 0, taxRate: Number(l.taxRate) })),
       };
       if (isInvoice && !id && paidNow.on) {
         body.paidNow = { amount: Number(paidNow.amount) || t.total, mode: paidNow.mode, accountId: paidNow.accountId || null, date: f.date };

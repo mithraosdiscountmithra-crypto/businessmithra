@@ -7,6 +7,7 @@ import { computeDoc, dateOnly, docSchema, GST_RATES, invoiceStatus, istToday, nu
 import { HttpError, requireAuth, requirePermission } from '../middleware/auth.js';
 import { autoSendEnabled, sendBillOnWhatsApp } from '../lib/whatsappBill.js';
 import { billFileName } from '../lib/billPdf.js';
+import { applyLines, reverseRef } from '../lib/stock.js';
 
 const router = Router();
 router.use(requireAuth());
@@ -53,8 +54,11 @@ export async function defaultAccountId(tx, businessId, mode) {
 export async function recalcInvoice(tx, invoiceId) {
   const inv = await tx.invoice.findUnique({ where: { id: invoiceId } });
   if (!inv) return;
-  const agg = await tx.payment.aggregate({ where: { invoiceId }, _sum: { amount: true } });
-  const paid = r2(num(agg._sum.amount));
+  const [agg, cn] = await Promise.all([
+    tx.payment.aggregate({ where: { invoiceId }, _sum: { amount: true } }),
+    tx.creditNote.aggregate({ where: { invoiceId, settle: 'adjust' }, _sum: { total: true } }),
+  ]);
+  const paid = r2(num(agg._sum.amount) + num(cn._sum.total));
   await tx.invoice.update({
     where: { id: invoiceId },
     data: { amountPaid: paid, status: inv.status === 'cancelled' ? 'cancelled' : invoiceStatus(inv.total, paid) },
@@ -182,6 +186,7 @@ router.post('/', requirePermission('sales', 'add'), h(async (req, res) => {
         items: { create: c.lines },
       },
     });
+    await applyLines(tx, { businessId: req.businessId, refType: 'invoice', refId: created.id, lines: c.lines, sign: -1, reason: 'sale', userId: req.user.id });
     if (paidNow) {
       const accountId = paidNow.accountId || (await defaultAccountId(tx, req.businessId, paidNow.mode));
       await tx.payment.create({
@@ -219,6 +224,9 @@ router.put('/:id', requirePermission('sales', 'edit'), h(async (req, res) => {
       },
     });
     if (ex.customerId !== d.customerId) await tx.payment.updateMany({ where: { invoiceId: ex.id }, data: { customerId: d.customerId } });
+    if (!(await tx.stockMove.count({ where: { refType: 'order', refId: { not: null }, note: `invoice:${ex.id}` } }))) {
+      await applyLines(tx, { businessId: req.businessId, refType: 'invoice', refId: ex.id, lines: c.lines, sign: -1, reason: 'sale', userId: req.user.id });
+    }
     await recalcInvoice(tx, ex.id);
   });
   await logActivity(req.businessId, req.user.id, 'update', 'invoice', ex.id);
@@ -230,7 +238,10 @@ router.post('/:id/cancel', requirePermission('sales', 'delete'), h(async (req, r
   const ex = await prisma.invoice.findFirst({ where: { id: req.params.id, businessId: req.businessId } });
   if (!ex) throw new HttpError(404, 'Invoice not found');
   if (num(ex.amountPaid) > 0) throw new HttpError(400, 'Remove the payments on this invoice before cancelling it');
-  const inv = await prisma.invoice.update({ where: { id: ex.id }, data: { status: 'cancelled' }, include });
+  const inv = await prisma.$transaction(async (tx) => {
+    await reverseRef(tx, 'invoice', ex.id);
+    return tx.invoice.update({ where: { id: ex.id }, data: { status: 'cancelled' }, include });
+  });
   await logActivity(req.businessId, req.user.id, 'cancel', 'invoice', ex.id);
   res.json({ invoice: inv });
 }));

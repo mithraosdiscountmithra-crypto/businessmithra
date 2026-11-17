@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { h } from '../lib/route.js';
+import { REAL_EXP, extraTotals } from '../lib/reports.js';
 import { addDays, dateOnly, istToday, monthStart, num, r2 } from '../lib/money.js';
 import { hasPermission, requireAuth } from '../middleware/auth.js';
 
@@ -68,11 +69,12 @@ router.get('/', h(async (req, res) => {
   if (hasPermission(req.user, 'accounts', 'view')) {
     const range = { gte: dateOnly(monthStart(today)), lt: dateOnly(addDays(today, 1)) };
     const [exp, inc] = await Promise.all([
-      prisma.expense.aggregate({ where: { businessId: b, date: range }, _sum: { amount: true, taxAmount: true } }),
+      prisma.expense.aggregate({ where: { businessId: b, date: range, ...REAL_EXP }, _sum: { amount: true, taxAmount: true } }),
       prisma.invoice.aggregate({ where: { businessId: b, status: { not: 'cancelled' }, date: range }, _sum: { subtotal: true, discount: true } }),
     ]);
-    const income = r2(num(inc._sum.subtotal) - num(inc._sum.discount));
-    const expenses = r2(num(exp._sum.amount) - num(exp._sum.taxAmount));
+    const ex = await extraTotals(b, range);
+    const income = r2(num(inc._sum.subtotal) - num(inc._sum.discount) - ex.returnsTaxable);
+    const expenses = r2(num(exp._sum.amount) - num(exp._sum.taxAmount) + ex.purchasesTaxable);
     out.accounts = { monthIncome: income, monthExpenses: expenses, monthProfit: r2(income - expenses) };
   }
 

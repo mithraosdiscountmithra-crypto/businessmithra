@@ -5,6 +5,10 @@ import Login from './pages/Login.jsx';
 import Signup from './pages/Signup.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import ModuleSoon from './pages/ModuleSoon.jsx';
+import Stock from './pages/ops/Stock.jsx';
+import Purchases from './pages/ops/Purchases.jsx';
+import Suppliers from './pages/ops/Suppliers.jsx';
+import Returns from './pages/sales/Returns.jsx';
 import Settings from './pages/Settings.jsx';
 import Staff from './pages/Staff.jsx';
 import PublicInvoice from './pages/PublicInvoice.jsx';
@@ -116,6 +120,12 @@ export default function App() {
       <Route path="/sales/invoices/new" element={<Private module="sales"><DocEditor key="in" kind="invoice" /></Private>} />
       <Route path="/sales/invoices/:id" element={<Private module="sales"><InvoiceView /></Private>} />
       <Route path="/sales/invoices/:id/edit" element={<Private module="sales"><DocEditor key="ie" kind="invoice" /></Private>} />
+      <Route path="/sales/returns" element={<Private module="sales"><Returns /></Private>} />
+      <Route path="/ops" element={<Navigate to="/ops/stock" replace />} />
+      <Route path="/ops/stock" element={<Private module="operations"><Stock /></Private>} />
+      <Route path="/ops/purchases" element={<Private module="operations"><Purchases key="b" kind="bill" /></Private>} />
+      <Route path="/ops/purchase-returns" element={<Private module="operations"><Purchases key="r" kind="return" /></Private>} />
+      <Route path="/ops/suppliers" element={<Private module="operations"><Suppliers /></Private>} />
       <Route path="/sales/reports" element={<Private module="sales"><SalesReports /></Private>} />
       <Route path="/accounts" element={<Private module="accounts"><AccountsOverview /></Private>} />
       <Route path="/accounts/expenses" element={<Private module="accounts"><Expenses /></Private>} />

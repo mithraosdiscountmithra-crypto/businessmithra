@@ -13,7 +13,10 @@ function ItemForm({ item, onClose, onSaved }) {
     mrp: item?.mrp ?? '', description: item?.description || '', category: item?.category || '',
     images: item?.images || [], showInShop: item?.showInShop ?? true, inStock: item?.inStock ?? true,
     variants: (item?.variants || []).map((v) => ({ ...v, mrp: v.mrp ?? '' })),
+    trackStock: item?.trackStock ?? false, openingStock: '', lowStockAt: Number(item?.lowStockAt) || '',
+    costPrice: Number(item?.costPrice) || '', barcode: item?.barcode || '',
   });
+  const firstTrack = !item?.trackStock;
   const vid = () => Math.random().toString(36).slice(2, 10);
   const setVariants = (variants) => setF((x) => ({ ...x, variants }));
   const setV = (id, patch) => setVariants(f.variants.map((v) => (v.id === id ? { ...v, ...patch } : v)));
@@ -28,7 +31,8 @@ function ItemForm({ item, onClose, onSaved }) {
     try {
       await api(item ? `/items/${item.id}` : '/items', { method: item ? 'PUT' : 'POST', body: {
         ...f, price: Number(f.price || 0), taxRate: Number(f.taxRate), mrp: f.mrp === '' ? null : Number(f.mrp), active: true,
-        variants: f.variants.filter((v) => v.name.trim()).map((v) => ({ ...v, price: Number(v.price || 0), mrp: v.mrp === '' ? null : Number(v.mrp) })),
+        variants: f.variants.filter((v) => v.name.trim()).map((v) => ({ ...v, price: Number(v.price || 0), mrp: v.mrp === '' ? null : Number(v.mrp), stock: Number(v.stock) || 0 })),
+        openingStock: Number(f.openingStock) || 0, lowStockAt: Number(f.lowStockAt) || 0, costPrice: Number(f.costPrice) || 0,
       } });
       onSaved();
     } catch (x) {
@@ -83,6 +87,28 @@ function ItemForm({ item, onClose, onSaved }) {
               <p className="text-xs text-muted">Sizes unte paina "Price" kakunda, ikkada prati size ki price vaadataru.</p>
             </div>
           )}
+        </div>
+        <div className="flex flex-col gap-3 pt-2 border-t border-line">
+          <label className="flex items-center gap-2 font-bold"><input type="checkbox" className="w-5 h-5 accent-brand" checked={f.trackStock} onChange={set('trackStock')} /> Stock track cheyyi</label>
+          <p className="text-xs text-muted -mt-2">On chesthe bill / order ayinappudu stock auto ga taggutundi, purchase lo perugutundi. Stock 0 ayithe shop lo "Out of stock" chupistundi.</p>
+          {f.trackStock && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {firstTrack && !f.variants.length && <Field label={`Opening stock (${f.unit})`} id="i-open" hint="Ippudu shop lo entha undi"><input id="i-open" type="number" min="0" step="any" className="input" value={f.openingStock} onChange={set('openingStock')} /></Field>}
+              {firstTrack && !item && f.variants.length > 0 && (
+                <div className="sm:col-span-2 flex flex-col gap-2">
+                  <span className="text-sm font-semibold">Opening stock – prati size ki</span>
+                  {f.variants.filter((v) => v.name.trim()).map((v) => (
+                    <label key={v.id} className="flex items-center gap-3 text-sm"><span className="w-28">{v.name}</span>
+                      <input type="number" min="0" step="any" aria-label={`Opening stock ${v.name}`} className="input h-10 w-32" value={v.stock ?? ''} onChange={(e) => setV(v.id, { stock: e.target.value })} /></label>
+                  ))}
+                </div>
+              )}
+              {!firstTrack && <p className="sm:col-span-2 text-sm bg-gray-50 rounded-lg p-3">Current stock: <b>{f.variants.length ? f.variants.map((v) => `${v.name}: ${Number(v.stock) || 0}`).join(' · ') : `${Number(item.stock)} ${item.unit}`}</b><span className="block text-xs text-muted">Stock marchali ante Operations → Stock lo "Adjust" vaadandi.</span></p>}
+              <Field label="Low stock alert at" id="i-low" hint="Intha kanna takkuva ayithe alert"><input id="i-low" type="number" min="0" step="any" className="input" value={f.lowStockAt} onChange={set('lowStockAt')} /></Field>
+              <Field label="Cost price ₹ (konna dhara)" id="i-cost" hint="Profit report kosam; purchase bill tho auto update"><input id="i-cost" type="number" min="0" step="0.01" className="input" value={f.costPrice} onChange={set('costPrice')} /></Field>
+            </div>
+          )}
+          <Field label="Barcode (optional)" id="i-bar" hint="Scan chesi POS lo veganga add cheyyochu"><input id="i-bar" className="input" value={f.barcode} onChange={set('barcode')} /></Field>
         </div>
         <h3 className="font-bold pt-2 border-t border-line">Online shop</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -141,7 +167,7 @@ export default function Items() {
                     <div className="flex items-center gap-3">
                       {it.images?.[0] ? <img src={it.images[0]} alt="" className="w-11 h-11 rounded-lg object-cover border border-line" /> : <span className="w-11 h-11 rounded-lg bg-gray-100 shrink-0" aria-hidden="true" />}
                       <div><span className="font-semibold">{it.name}</span>
-                        <span className="block text-xs text-muted">{[it.category, it.sku, it.showInShop ? 'In shop' : 'Not in shop', it.inStock ? '' : 'Out of stock'].filter(Boolean).join(' · ')}</span></div>
+                        <span className="block text-xs text-muted">{[it.category, it.sku, it.showInShop ? 'In shop' : 'Not in shop', it.inStock ? '' : 'Out of stock', it.trackStock ? `Stock: ${Number(it.stock)}` : ''].filter(Boolean).join(' · ')}</span></div>
                     </div>
                   </td>
                   <td className="p-3 capitalize">{it.type}</td>
