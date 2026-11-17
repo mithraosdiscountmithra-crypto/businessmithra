@@ -4,6 +4,7 @@ import { api } from '../../api.js';
 import { inr } from '../../lib/format.js';
 import { addOrderToken } from '../../lib/shopDevice.js';
 import UpiPay from '../../components/UpiPay.jsx';
+import { hostShop } from '../../lib/hostShop.js';
 
 const STEPS = { order: ['new', 'confirmed', 'ready', 'completed'], booking: ['new', 'confirmed', 'completed'], table: ['new', 'confirmed', 'completed'] };
 const LABEL = { new: 'Order received', confirmed: 'Confirmed', ready: 'Ready', completed: 'Completed', cancelled: 'Cancelled' };
@@ -81,7 +82,7 @@ export default function OrderStatus() {
           <p className="text-xs text-muted pt-1">{o.fulfilment === 'delivery' ? `Delivery to: ${o.address}` : isBooking ? `Time: ${new Date(o.preferredAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}` : 'Takeaway / pickup'}</p>
         </div>}
 
-        <Link to={`/s/${shop.slug}`} className="text-center font-semibold" style={{ color }}>← Back to {shop.name} · My Orders</Link>
+        <Link to={hostShop() ? '/' : `/s/${shop.slug}`} className="text-center font-semibold" style={{ color }}>← Back to {shop.name} · My Orders</Link>
         <p className="text-center text-xs text-muted">Ee page ni bookmark cheyyandi – status ikkada update avutundi.</p>
       </div>
     </div>

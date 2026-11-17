@@ -7,6 +7,7 @@ import { h } from '../lib/route.js';
 import { computeDoc, dateOnly, istToday, num } from '../lib/money.js';
 import { HttpError, requireAuth, requireOwner, requirePermission } from '../middleware/auth.js';
 import { defaultAccountId, MODES, recalcInvoice } from './invoices.js';
+import { clearDomainCache, normalizeDomain } from '../lib/domains.js';
 
 const router = Router();
 router.use(requireAuth());
@@ -28,6 +29,7 @@ const shopFields = (b) => ({
   shopCover: b.shopCover || '', shopColor: b.shopColor, shopTimings: b.shopTimings || '', upiId: b.upiId || '',
   allowPickup: b.allowPickup, allowDelivery: b.allowDelivery, deliveryFee: num(b.deliveryFee), minOrder: num(b.minOrder), allowBooking: b.allowBooking,
   allowTable: b.allowTable, shopLat: b.shopLat, shopLng: b.shopLng, shopMapUrl: b.shopMapUrl || '',
+  customDomain: b.customDomain || '', customDomainStatus: b.customDomainStatus || null,
 });
 
 const url = z.string().trim().max(500).refine((v) => v === '' || /^https:\/\//.test(v), 'Image link must start with https://').transform((v) => v || null);
@@ -58,6 +60,22 @@ router.get('/settings', requireOwner, h(async (req, res) => {
   const b = await prisma.business.findUnique({ where: { id: req.businessId } });
   b.slug = await ensureSlug(b);
   res.json({ settings: shopFields(b) });
+}));
+
+// Vendor asks to connect their own domain; BusinessMithra team adds it on the server and marks it live.
+router.put('/domain', requireOwner, h(async (req, res) => {
+  const raw = normalizeDomain(req.body?.domain);
+  if (raw && !/^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/.test(raw)) throw new HttpError(400, 'Enter a valid domain like srisaitextiles.in');
+  if (raw && /onrender\.com$|businessmithra/.test(raw)) throw new HttpError(400, 'Please enter your own domain');
+  const domain = raw ? `www.${raw}` : null;
+  if (domain) {
+    const dup = await prisma.business.findFirst({ where: { customDomain: domain, NOT: { id: req.businessId } } });
+    if (dup) throw new HttpError(409, 'This domain is already connected to another shop');
+  }
+  const b = await prisma.business.update({ where: { id: req.businessId }, data: { customDomain: domain, customDomainStatus: domain ? 'requested' : null } });
+  clearDomainCache();
+  await logActivity(req.businessId, req.user.id, domain ? 'domain_request' : 'domain_remove', 'shop', b.id);
+  res.json({ customDomain: b.customDomain, customDomainStatus: b.customDomainStatus });
 }));
 
 router.put('/settings', requireOwner, h(async (req, res) => {

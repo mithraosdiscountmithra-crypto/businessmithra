@@ -29,6 +29,7 @@ import ShopSettings from './pages/ShopSettings.jsx';
 import Billing from './pages/Billing.jsx';
 import QuickBill from './pages/sales/QuickBill.jsx';
 import Memberships from './pages/sales/Memberships.jsx';
+import { hostShop } from './lib/hostShop.js';
 import AdminApp from './pages/admin/AdminApp.jsx';
 
 function Splash() {
@@ -76,6 +77,17 @@ function PublicOnly({ children }) {
 }
 
 export default function App() {
+  // Vendor's own domain: only the shop and its order / bill pages.
+  if (hostShop()) {
+    return (
+      <Routes>
+        <Route path="/" element={<Storefront />} />
+        <Route path="/o/:token" element={<OrderStatus />} />
+        <Route path="/i/:token" element={<PublicInvoice />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    );
+  }
   return (
     <Routes>
       <Route path="/login" element={<PublicOnly><Login /></PublicOnly>} />

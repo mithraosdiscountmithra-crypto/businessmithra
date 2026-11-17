@@ -10,6 +10,7 @@ import { num, r2 } from '../lib/money.js';
 import { accessState, addPeriod, clearPlanCache, getPlans } from '../lib/plans.js';
 import { MODULES } from '../lib/constants.js';
 import { HttpError } from '../middleware/auth.js';
+import { clearDomainCache } from '../lib/domains.js';
 
 const router = Router();
 const COOKIE = 'bm_admin';
@@ -71,6 +72,7 @@ router.get('/stats', h(async (_req, res) => {
     prisma.shopOrder.count({ where: { createdAt: { gte: weekAgo } } }),
     prisma.invoice.count({ where: { createdAt: { gte: weekAgo } } }),
   ]);
+  const domainRequests = await prisma.business.findMany({ where: { customDomainStatus: 'requested' }, select: { id: true, name: true, customDomain: true } });
   let trial = 0; let paid = 0; let free = 0; let expired = 0; let blocked = 0; let mrr = 0; let trialEndingSoon = 0;
   const byType = {};
   for (const b of businesses) {
@@ -90,7 +92,7 @@ router.get('/stats', h(async (_req, res) => {
     total: businesses.length, trial, paid, free, expired, blocked, trialEndingSoon,
     mrr: r2(mrr), pending,
     revenueMonth: r2(num(revenueMonth._sum.amount)), revenueAll: r2(num(revenueAll._sum.amount)),
-    signupsWeek, signupsMonth, ordersWeek, invoicesWeek,
+    signupsWeek, signupsMonth, ordersWeek, invoicesWeek, domainRequests,
     byType: Object.entries(byType).map(([type, count]) => ({ type, count })).sort((a, b) => b.count - a.count),
   });
 }));
@@ -117,6 +119,7 @@ router.get('/businesses', h(async (req, res) => {
     const state = b.status === 'blocked' ? 'blocked' : !a.active ? 'expired' : a.plan === 'trial' ? 'trial' : a.plan === 'free' ? 'free' : 'paid';
     return {
       id: b.id, name: b.name, type: b.type, city: b.city, phone: b.phone, slug: b.slug, shopEnabled: b.shopEnabled,
+      customDomain: b.customDomain, customDomainStatus: b.customDomainStatus,
       owner: b.users[0] || null, plan: a.planName, state, daysLeft: a.daysLeft, endsAt: a.endsAt,
       createdAt: b.createdAt, lastActive: last[b.id] || null, counts: b._count,
     };
@@ -141,7 +144,7 @@ router.get('/businesses/:id', h(async (req, res) => {
 }));
 
 const updateSchema = z.object({
-  action: z.enum(['block', 'unblock', 'extend_trial', 'set_plan', 'note']),
+  action: z.enum(['block', 'unblock', 'extend_trial', 'set_plan', 'note', 'domain_live', 'domain_pending', 'domain_remove']),
   days: z.coerce.number().int().min(1).max(365).optional(),
   planCode: z.string().optional(),
   cycle: z.enum(['monthly', 'yearly']).optional(),
@@ -168,7 +171,11 @@ router.post('/businesses/:id', h(async (req, res) => {
       ? { plan: 'free', planEndsAt: null, planCycle: null }
       : { plan: plan.code, planCycle: d.cycle || 'monthly', planEndsAt: d.endsAt ? new Date(`${d.endsAt}T23:59:59.000Z`) : addPeriod(new Date(), d.cycle || 'monthly') };
   }
+  if (d.action === 'domain_live') data = { customDomainStatus: 'live' };
+  if (d.action === 'domain_pending') data = { customDomainStatus: 'requested' };
+  if (d.action === 'domain_remove') data = { customDomain: null, customDomainStatus: null };
   await prisma.business.update({ where: { id: b.id }, data });
+  clearDomainCache();
   res.json({ ok: true });
 }));
 

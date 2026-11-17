@@ -14,14 +14,27 @@ export default function ShopSettings() {
   const [copied, setCopied] = useState(false);
   const [locBusy, setLocBusy] = useState(false);
   const [locMsg, setLocMsg] = useState('');
+  const [cname, setCname] = useState(null);
+  const [domain, setDomain] = useState('');
+  const [domMsg, setDomMsg] = useState('');
 
   useEffect(() => {
-    api('/shop-admin/settings').then((r) => setF(r.settings)).catch((e) => setErr(e.message));
+    api('/shop-admin/settings').then((r) => { setF(r.settings); setCname(r.cnameTarget); setDomain((r.settings.customDomain || '').replace(/^www\./, '')); }).catch((e) => setErr(e.message));
   }, []);
 
   if (!f) return <p className="text-muted">{err || 'Loading…'}</p>;
   const set = (k) => (e) => setF({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value });
-  const link = `${window.location.origin}/s/${f.slug}`;
+  const link = f.customDomain && f.customDomainStatus === 'live' ? `https://${f.customDomain}` : `${window.location.origin}/s/${f.slug}`;
+  const saveDomain = async (value) => {
+    setDomMsg('');
+    try {
+      const r = await api('/shop-admin/domain', { method: 'PUT', body: { domain: value } });
+      setF({ ...f, ...r });
+      setDomMsg(value ? 'Request pampamu ✓ Kinda DNS steps cheyyandi.' : 'Domain teesesamu.');
+    } catch (x) {
+      setDomMsg(x.message);
+    }
+  };
 
   const save = async (e) => {
     e.preventDefault();
@@ -99,6 +112,35 @@ export default function ShopSettings() {
           <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=8&data=${encodeURIComponent(link)}`} alt="QR code for your shop link" width="160" height="160" className="rounded-xl border border-line" />
           <a className="text-xs font-semibold text-brand" href={`https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&margin=20&data=${encodeURIComponent(link)}`} target="_blank" rel="noreferrer">Download QR (counter lo pettandi)</a>
         </div>
+      </section>
+
+      <section className="card p-5 flex flex-col gap-4">
+        <div>
+          <h2 className="text-lg font-bold">🌐 Mee own website domain (optional)</h2>
+          <p className="text-sm text-muted">e.g. <strong>srisaitextiles.in</strong>. Customers Google lo mee peru search chesthe mee own website ga vastundi. Domain GoDaddy / Hostinger / BigRock lo konandi.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <label className="sr-only" htmlFor="sh-dom">Domain</label>
+          <input id="sh-dom" className="input flex-1 min-w-[220px]" value={domain} onChange={(e) => setDomain(e.target.value.toLowerCase())} placeholder="srisaitextiles.in" />
+          <button type="button" className="btn-primary" onClick={() => saveDomain(domain)}>{f.customDomain ? 'Update' : 'Connect'}</button>
+          {f.customDomain && <button type="button" className="btn-ghost text-red-700" onClick={() => { setDomain(''); saveDomain(''); }}>Remove</button>}
+        </div>
+        {domMsg && <p className="text-sm font-semibold">{domMsg}</p>}
+        {f.customDomain && (
+          <div className={`rounded-xl p-4 text-sm flex flex-col gap-2 ${f.customDomainStatus === 'live' ? 'bg-green-50' : 'bg-amber-50'}`}>
+            <p className="font-bold">{f.customDomainStatus === 'live' ? `✅ Live: https://${f.customDomain}` : `⏳ ${f.customDomain} – setup jarugutundi`}</p>
+            {f.customDomainStatus !== 'live' && (
+              <>
+                <p>Mee domain company (GoDaddy / Hostinger…) DNS settings lo ee 2 cheyyandi:</p>
+                <ol className="list-decimal pl-5 flex flex-col gap-1">
+                  <li><strong>CNAME</strong> record: Name/Host <code className="bg-white px-1 rounded">www</code> → Value/Points to <code className="bg-white px-1 rounded">{cname || 'BusinessMithra team cheptaru'}</code></li>
+                  <li><strong>Domain forwarding</strong>: <code className="bg-white px-1 rounded">{f.customDomain.replace(/^www\./, '')}</code> → <code className="bg-white px-1 rounded">https://{f.customDomain}</code> (permanent / 301)</li>
+                </ol>
+                <p>Taruvata BusinessMithra team server lo connect chesi live chestaru (24 gantallo). Help kavalante maaku WhatsApp cheyyandi.</p>
+              </>
+            )}
+          </div>
+        )}
       </section>
 
       <section className="card p-5 flex flex-col gap-4">

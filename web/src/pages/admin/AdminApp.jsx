@@ -56,6 +56,12 @@ function Dashboard() {
           <span>⏳ {data.pending} plan request{data.pending > 1 ? 's' : ''} waiting for your approval</span><span>Open →</span>
         </Link>
       )}
+      {data.domainRequests?.length > 0 && (
+        <section className="rounded-2xl bg-blue-50 border-2 border-blue-200 p-4 flex flex-col gap-1">
+          <p className="font-bold">🌐 {data.domainRequests.length} own-domain request(s)</p>
+          {data.domainRequests.map((d) => <Link key={d.id} to={`/admin/businesses/${d.id}`} className="text-sm font-semibold text-brand">{d.name} → {d.customDomain}</Link>)}
+        </section>
+      )}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Stat label="Total businesses" value={data.total} sub={`+${data.signupsWeek} this week · +${data.signupsMonth} this month`} />
         <Stat label="Paid businesses" value={data.paid} tone="text-green-800" />
@@ -111,7 +117,7 @@ function Businesses() {
           <tbody>
             {(data?.businesses || []).map((b) => (
               <tr key={b.id} className="border-t border-gray-100 hover:bg-gray-50">
-                <td className="p-3"><Link to={`/admin/businesses/${b.id}`} className="font-bold text-brand">{b.name}</Link><span className="block text-xs text-muted capitalize">{b.type}{b.city ? ` · ${b.city}` : ''}</span></td>
+                <td className="p-3"><Link to={`/admin/businesses/${b.id}`} className="font-bold text-brand">{b.name}</Link><span className="block text-xs text-muted capitalize">{b.type}{b.city ? ` · ${b.city}` : ''}{b.customDomain ? ` · 🌐 ${b.customDomain}` : ''}</span></td>
                 <td className="p-3">{b.owner?.name}<span className="block text-xs text-muted">{b.phone}</span></td>
                 <td className="p-3"><Pill s={b.state} /> <span className="text-xs text-muted">{b.plan}</span></td>
                 <td className="p-3">{b.endsAt ? <>{fmtDate(b.endsAt)}<span className="block text-xs text-muted">{b.daysLeft} days</span></> : '—'}</td>
@@ -187,6 +193,27 @@ function BusinessDetail() {
           <p>Total sales billed: <strong>{inr(data.totalSales)}</strong></p>
           <p>{b._count.customers} customers · {b._count.invoices} invoices · {b._count.orders} online orders · {b._count.items} items · {b._count.leads} leads · {b._count.expenses} expenses</p>
           <p>Staff: {b.users.length} · Modules ON: {b.modules.filter((m) => m.enabled).map((m) => MODULE_INFO[m.module]?.label || m.module).join(', ')}</p>
+        </section>
+        <section className="card p-5 flex flex-col gap-2 text-sm">
+          <h2 className="font-bold">🌐 Own domain</h2>
+          {b.customDomain ? (
+            <>
+              <p><strong>{b.customDomain}</strong> · <span className={b.customDomainStatus === 'live' ? 'text-green-800 font-bold' : 'text-amber-800 font-bold'}>{b.customDomainStatus}</span></p>
+              {b.customDomainStatus !== 'live' && (
+                <ol className="list-decimal pl-5 text-xs text-gray-700">
+                  <li>Render → businessmithra → Settings → Custom Domains → Add <strong>{b.customDomain}</strong></li>
+                  <li>Vendor DNS lo CNAME www → service onrender address undaa check</li>
+                  <li>Render lo "Verified" + certificate vachaka kinda "Mark live"</li>
+                </ol>
+              )}
+              <div className="flex flex-wrap gap-2">
+                {b.customDomainStatus !== 'live'
+                  ? <button type="button" className="btn-primary h-9 px-3" onClick={() => act({ action: 'domain_live' })}>Mark live</button>
+                  : <a className="btn-ghost h-9 px-3" href={`https://${b.customDomain}`} target="_blank" rel="noreferrer">Open</a>}
+                <button type="button" className="btn-ghost h-9 px-3 text-red-700" onClick={() => act({ action: 'domain_remove' }, 'Remove this domain?')}>Remove</button>
+              </div>
+            </>
+          ) : <p className="text-muted">Ledu</p>}
         </section>
         <section className="card p-5 flex flex-col gap-2">
           <h2 className="font-bold">Private note</h2>

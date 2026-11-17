@@ -53,6 +53,8 @@ model Business {
   shopMapUrl    String?
   nextOrderNo   Int            @default(1)
   membershipsEnabled Boolean   @default(false)
+  customDomain       String?   // (unique, checked in code) vendor's own domain, e.g. www.srisaitextiles.in
+  customDomainStatus String?   // requested, live
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
   users       User[]

@@ -27,6 +27,7 @@ import adminRoutes from './routes/admin.js';
 import membershipRoutes from './routes/memberships.js';
 import { Prisma } from '@prisma/client';
 import { prisma } from './lib/prisma.js';
+import { shopForHost } from './lib/domains.js';
 
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
   console.error('JWT_SECRET is missing or shorter than 32 characters. Set it in Render > Environment.');
@@ -96,12 +97,16 @@ app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
 const siteUrl = (req) => (process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
 const esc = (t) => String(t ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-app.get('/robots.txt', (req, res) => {
+app.get('/robots.txt', async (req, res) => {
+  if (await shopForHost(req.hostname)) return res.type('text/plain').send(`User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /o/\nDisallow: /i/\nSitemap: https://${req.hostname}/sitemap.xml\n`);
   res.type('text/plain').send(`User-agent: *\nAllow: /s/\nDisallow: /admin\nDisallow: /api/\nDisallow: /i/\nDisallow: /o/\nSitemap: ${siteUrl(req)}/sitemap.xml\n`);
 });
 
 app.get('/sitemap.xml', async (req, res, next) => {
   try {
+    if (await shopForHost(req.hostname)) {
+      return res.type('application/xml').send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://${esc(req.hostname)}/</loc></url></urlset>`);
+    }
     const shops = await prisma.business.findMany({ where: { shopEnabled: true, status: 'active', slug: { not: null } }, select: { slug: true, updatedAt: true }, take: 50000 });
     const base = siteUrl(req);
     const urls = [`<url><loc>${base}/</loc></url>`, ...shops.map((s2) => `<url><loc>${base}/s/${esc(s2.slug)}</loc><lastmod>${s2.updatedAt.toISOString().slice(0, 10)}</lastmod></url>`)];
@@ -118,12 +123,12 @@ if (fs.existsSync(webDist)) {
   app.use(express.static(webDist, { index: false, maxAge: '1h' }));
 
   // Shop pages get their own title, description, preview image and business details for Google & WhatsApp.
-  app.get('/s/:slug', async (req, res) => {
+  const shopPage = async (req, res, slug, ownDomain) => {
     let html = indexHtml;
     try {
-      const b = await prisma.business.findUnique({ where: { slug: String(req.params.slug).toLowerCase() } });
+      const b = await prisma.business.findUnique({ where: { slug: String(slug).toLowerCase() } });
       if (b && b.shopEnabled && b.status === 'active') {
-        const url = `${siteUrl(req)}/s/${b.slug}`;
+        const url = ownDomain ? `https://${req.hostname}/` : `${siteUrl(req)}/s/${b.slug}`;
         const place = [b.city, b.state].filter(Boolean).join(', ');
         const title = `${b.name}${place ? ` – ${b.city || b.state}` : ''} | Order Online`;
         const desc = (b.shopTagline || b.shopAbout || `${b.name}${place ? ` in ${place}` : ''}. Order online, home delivery, book and pay by UPI.`).slice(0, 160);
@@ -153,8 +158,24 @@ if (fs.existsSync(webDist)) {
     } catch (e) {
       console.error('shop meta failed', e.message);
     }
+    if (ownDomain) html = html.replace('</head>', `<meta name="bm-shop" content="${esc(slug)}" />\n  </head>`);
     res.set('Cache-Control', 'no-cache').type('html').send(html);
+  };
+
+  // Vendor's own domain (e.g. www.srisaitextiles.in) opens their shop directly.
+  app.get('*', async (req, res, next) => {
+    try {
+      const slug = await shopForHost(req.hostname);
+      if (!slug) return next();
+      if (req.path === '/' || req.path === `/s/${slug}`) return shopPage(req, res, slug, true);
+      const html = indexHtml.replace('</head>', `<meta name="bm-shop" content="${esc(slug)}" />\n  </head>`);
+      return res.set('Cache-Control', 'no-cache').set('X-Robots-Tag', 'noindex').type('html').send(html);
+    } catch (e) {
+      return next(e);
+    }
   });
+
+  app.get('/s/:slug', (req, res) => shopPage(req, res, req.params.slug, false));
 
   app.get('*', (req, res) => {
     // Private pages stay out of Google.

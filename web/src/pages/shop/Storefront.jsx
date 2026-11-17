@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../api.js';
 import { fmtDate, fmtDateTime, inr } from '../../lib/format.js';
 import UpiPay from '../../components/UpiPay.jsx';
+import { hostShop } from '../../lib/hostShop.js';
 import { addOrderToken, clearMe, getMe, getOrderTokens, getShopToken, setMe, setShopToken } from '../../lib/shopDevice.js';
 
 const CART_KEY = (slug) => `bm_cart_${slug}`;
@@ -109,7 +110,8 @@ function ItemCard({ it, cart, color, onAdd, onDec, onBook, onAsk, onOpen }) {
 }
 
 export default function Storefront() {
-  const { slug } = useParams();
+  const params = useParams();
+  const slug = params.slug || hostShop();
   const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [err, setErr] = useState('');
