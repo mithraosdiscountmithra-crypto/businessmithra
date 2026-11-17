@@ -7,6 +7,7 @@ import { prisma, logActivity } from '../lib/prisma.js';
 import { h } from '../lib/route.js';
 import { computeDoc, num, r2 } from '../lib/money.js';
 import { HttpError } from '../middleware/auth.js';
+import { otpEnabled, sendOtp, shopPhone, verifyOtp } from '../lib/otp.js';
 
 const router = Router();
 
@@ -30,7 +31,7 @@ const publicBusiness = (b) => ({
   name: b.name, slug: b.slug, type: b.type, tagline: b.shopTagline, about: b.shopAbout, logo: b.shopLogo, cover: b.shopCover,
   color: b.shopColor, timings: b.shopTimings, phone: b.phone, address: b.address, city: b.city, state: b.state,
   upi: Boolean(b.upiId), allowPickup: b.allowPickup, allowDelivery: b.allowDelivery, deliveryFee: num(b.deliveryFee),
-  minOrder: num(b.minOrder), allowBooking: b.allowBooking,
+  minOrder: num(b.minOrder), allowBooking: b.allowBooking, otp: otpEnabled(),
 });
 
 router.get('/:slug', h(async (req, res) => {
@@ -133,12 +134,34 @@ router.post('/:slug/hello', writeLimiter, h(async (req, res) => {
   res.json({ ok: true });
 }));
 
-// "My Orders": only orders whose secret tokens are saved on this phone.
+const otpLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: 'draft-7', legacyHeaders: false, message: { error: 'Too many requests. Please try again later.' } });
+
+router.post('/otp/send', otpLimiter, h(async (req, res) => {
+  const d = z.object({ phone, name: z.string().trim().max(80).optional() }).parse(req.body);
+  await sendOtp(d.phone, d.name);
+  res.json({ sent: true });
+}));
+
+router.post('/otp/verify', otpLimiter, h(async (req, res) => {
+  const d = z.object({ phone, code: z.string().trim().regex(/^\d{6}$/, 'Enter the 6-digit OTP') }).parse(req.body);
+  const token = await verifyOtp(d.phone, d.code);
+  res.json({ token });
+}));
+
+// "My Orders": with OTP login → every order of that mobile in this shop; otherwise only orders saved on this phone.
 router.post('/my-orders', h(async (req, res) => {
   const tokens = Array.isArray(req.body?.tokens) ? req.body.tokens.filter((t) => /^[a-f0-9]{32}$/.test(String(t))).slice(0, 50) : [];
-  if (!tokens.length) return res.json({ orders: [] });
+  const verified = shopPhone(req);
+  const or = [];
+  if (tokens.length) or.push({ token: { in: tokens } });
+  if (verified && req.body?.slug) {
+    const b = await prisma.business.findUnique({ where: { slug: String(req.body.slug).toLowerCase() } });
+    if (b) or.push({ businessId: b.id, phone: verified });
+  }
+  if (!or.length) return res.json({ orders: [] });
   const orders = await prisma.shopOrder.findMany({
-    where: { token: { in: tokens } },
+    where: { OR: or },
+    take: 100,
     select: { token: true, number: true, kind: true, status: true, total: true, paymentStatus: true, createdAt: true, preferredAt: true, _count: { select: { items: true } } },
     orderBy: { createdAt: 'desc' },
   });

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../api.js';
 import { fmtDateTime, inr } from '../../lib/format.js';
-import { addOrderToken, clearMe, getMe, getOrderTokens, setMe } from '../../lib/shopDevice.js';
+import { addOrderToken, clearMe, getMe, getOrderTokens, getShopToken, setMe, setShopToken } from '../../lib/shopDevice.js';
 
 const CART_KEY = (slug) => `bm_cart_${slug}`;
 const loadCart = (slug) => {
@@ -88,6 +88,8 @@ export default function Storefront() {
   const [me, setMeState] = useState(saved);
   const [form, setForm] = useState({ name: saved?.name || '', phone: saved?.phone || '', address: saved?.address || '', note: '', fulfilment: 'pickup', preferredAt: '', message: '' });
   const [myOrders, setMyOrders] = useState(null);
+  const [otpStep, setOtpStep] = useState(false);
+  const [otp, setOtp] = useState('');
   const [busy, setBusy] = useState(false);
   const [formErr, setFormErr] = useState('');
   const [sent, setSent] = useState(false);
@@ -119,15 +121,41 @@ export default function Storefront() {
   const dec = (id) => setCart((c) => ({ ...c, [id]: Math.max(0, (c[id] || 0) - 1) }));
   const setF = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
+  const finishHello = async () => {
+    await api(`/shop/${slug}/hello`, { method: 'POST', body: { name: form.name, phone: form.phone } });
+    const m = { name: form.name.trim(), phone: form.phone.trim(), address: me?.address || '', verified: Boolean(getShopToken()) };
+    setMe(m);
+    setMeState(m);
+  };
+
   const sayHello = async (e) => {
     e.preventDefault();
     setFormErr('');
     setBusy(true);
     try {
-      await api(`/shop/${slug}/hello`, { method: 'POST', body: { name: form.name, phone: form.phone } });
-      const m = { name: form.name.trim(), phone: form.phone.trim(), address: me?.address || '' };
-      setMe(m);
-      setMeState(m);
+      if (shop.otp) {
+        await api('/shop/otp/send', { method: 'POST', body: { phone: form.phone, name: form.name } });
+        setOtp('');
+        setOtpStep(true);
+      } else {
+        await finishHello();
+      }
+    } catch (x) {
+      setFormErr(x.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const checkOtp = async (e) => {
+    e.preventDefault();
+    setFormErr('');
+    setBusy(true);
+    try {
+      const r = await api('/shop/otp/verify', { method: 'POST', body: { phone: form.phone, code: otp } });
+      setShopToken(r.token);
+      await finishHello();
+      setOtpStep(false);
     } catch (x) {
       setFormErr(x.message);
     } finally {
@@ -139,7 +167,8 @@ export default function Storefront() {
     setSheet('orders');
     setMyOrders(null);
     try {
-      const r = await api('/shop/my-orders', { method: 'POST', body: { tokens: getOrderTokens(slug) } });
+      const t = getShopToken();
+      const r = await api('/shop/my-orders', { method: 'POST', body: { tokens: getOrderTokens(slug), slug }, headers: t ? { Authorization: `Bearer ${t}` } : {} });
       setMyOrders(r.orders);
     } catch {
       setMyOrders([]);
@@ -217,7 +246,7 @@ export default function Storefront() {
         {me && (
           <p className="max-w-5xl mx-auto px-4 pt-2 text-xs text-gray-600">
             Namaste <strong>{me.name}</strong> ({me.phone}) ·{' '}
-            <button type="button" className="underline font-semibold" onClick={() => { clearMe(); setMeState(null); setForm((f) => ({ ...f, name: '', phone: '' })); }}>Not you?</button>
+            <button type="button" className="underline font-semibold" onClick={() => { clearMe(); setShopToken(null); setMeState(null); setOtpStep(false); setForm((f) => ({ ...f, name: '', phone: '' })); }}>Not you?</button>
           </p>
         )}
         <div className="max-w-5xl mx-auto px-4 pt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
@@ -350,19 +379,27 @@ export default function Storefront() {
 
       {!me && (
         <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60" role="dialog" aria-modal="true" aria-label="Welcome">
-          <form onSubmit={sayHello} className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl p-6 flex flex-col gap-4">
+          <form onSubmit={otpStep ? checkOtp : sayHello} className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl p-6 flex flex-col gap-4">
             <div className="flex items-center gap-3">
               <div className="w-14 h-14 rounded-2xl overflow-hidden flex items-center justify-center bg-gray-100 shrink-0">
                 {shop.logo ? <img src={shop.logo} alt="" className="w-full h-full object-cover" /> : <span className="text-2xl font-extrabold" style={{ color }}>{shop.name.slice(0, 1)}</span>}
               </div>
               <div>
                 <h2 className="text-lg font-extrabold">Welcome to {shop.name}! 🙏</h2>
-                <p className="text-sm text-gray-600">Mee peru, mobile number cheppandi. Mee orders ee phone lo save avutayi.</p>
+                <p className="text-sm text-gray-600">{shop.otp ? 'Mee peru, WhatsApp number tho login avvandi. Mee orders eppudaina, ye phone lo ayina chudochu.' : 'Mee peru, mobile number cheppandi. Mee orders ee phone lo save avutayi.'}</p>
               </div>
             </div>
-            {contactFields}
+            {otpStep ? (
+              <div className="flex flex-col gap-2">
+                <label className="label" htmlFor="s-otp">WhatsApp lo vachina 6-digit OTP</label>
+                <input id="s-otp" required inputMode="numeric" autoComplete="one-time-code" maxLength={6} className="input text-center text-2xl tracking-[0.5em] font-bold h-14" value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))} autoFocus />
+                <p className="text-xs text-muted">+91 {form.phone} ki pampamu · <button type="button" className="underline font-semibold" onClick={() => { setOtpStep(false); setFormErr(''); }}>Number marchandi</button> · <button type="button" className="underline font-semibold" onClick={sayHello}>Malli pampandi</button></p>
+              </div>
+            ) : contactFields}
             {formErr && <p className="error-box" role="alert">{formErr}</p>}
-            <button type="submit" disabled={busy} className="h-14 rounded-2xl text-white font-bold text-base disabled:opacity-60" style={{ background: color }}>{busy ? 'Please wait…' : 'Continue to shop'}</button>
+            <button type="submit" disabled={busy} className="h-14 rounded-2xl text-white font-bold text-base disabled:opacity-60" style={{ background: color }}>
+              {busy ? 'Please wait…' : otpStep ? 'Verify & continue' : shop.otp ? 'Send OTP on WhatsApp' : 'Continue to shop'}
+            </button>
             <p className="text-xs text-center text-muted">Mee number {shop.name} tho matrame share avutundi.</p>
           </form>
         </div>

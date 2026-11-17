@@ -27,3 +27,7 @@ export const addOrderToken = (slug, token) => {
   const list = getOrderTokens(slug).filter((t) => t !== token);
   put(`bm_orders_${slug}`, [token, ...list].slice(0, 50));
 };
+
+// Verified WhatsApp-OTP login (token signed by our server).
+export const getShopToken = () => get('bm_shop_token', null);
+export const setShopToken = (t) => put('bm_shop_token', t);
