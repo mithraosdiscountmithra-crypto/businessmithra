@@ -1,0 +1,101 @@
+// BusinessMithra database schema – Phase 1A (foundation)
+// RULE: every business-owned table has businessId and every query filters by it.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Business {
+  id          String           @id @default(cuid())
+  name        String
+  type        String // retail, restaurant, salon, clinic, services, wholesale, manufacturing, education, others
+  phone       String
+  email       String?
+  gstin       String?
+  address     String?
+  city        String?
+  state       String?
+  plan        String           @default("trial") // trial, free, basic, pro
+  trialEndsAt DateTime
+  status      String           @default("active") // active, blocked
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  users       User[]
+  roles       Role[]
+  modules     BusinessModule[]
+  logs        ActivityLog[]
+}
+
+model User {
+  id           String    @id @default(cuid())
+  businessId   String
+  business     Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name         String
+  email        String    @unique
+  phone        String?
+  passwordHash String
+  roleId       String
+  role         Role      @relation(fields: [roleId], references: [id])
+  isOwner      Boolean   @default(false)
+  status       String    @default("active") // active, inactive
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([businessId])
+}
+
+model Role {
+  id          String           @id @default(cuid())
+  businessId  String
+  business    Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name        String
+  isSystem    Boolean          @default(false) // Owner role cannot be edited
+  createdAt   DateTime         @default(now())
+  permissions RolePermission[]
+  users       User[]
+
+  @@unique([businessId, name])
+  @@index([businessId])
+}
+
+model RolePermission {
+  id        String  @id @default(cuid())
+  roleId    String
+  role      Role    @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  module    String
+  canView   Boolean @default(false)
+  canAdd    Boolean @default(false)
+  canEdit   Boolean @default(false)
+  canDelete Boolean @default(false)
+
+  @@unique([roleId, module])
+}
+
+model BusinessModule {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  module     String
+  enabled    Boolean  @default(false)
+
+  @@unique([businessId, module])
+}
+
+model ActivityLog {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  userId     String?
+  action     String
+  entity     String?
+  entityId   String?
+  createdAt  DateTime @default(now())
+
+  @@index([businessId, createdAt])
+}
