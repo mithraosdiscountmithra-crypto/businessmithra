@@ -41,7 +41,7 @@ export async function sendOtp(phone, name) {
   } catch (e) {
     console.error('AiSensy OTP error', e.message);
   }
-  if (!ok) throw new HttpError(502, 'Could not send OTP on WhatsApp. Please try again.');
+  if (!ok) throw new HttpError(400, 'Could not send OTP on WhatsApp right now. Please try again in a minute.');
   await prisma.otpCode.create({ data: { phone, codeHash: hash(phone, code), expiresAt: new Date(Date.now() + OTP_TTL_MIN * 60000) } });
 }
 
