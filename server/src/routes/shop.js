@@ -119,6 +119,32 @@ router.post('/:slug/orders', writeLimiter, h(async (req, res) => {
   res.status(201).json({ token: order.token, number: order.number });
 }));
 
+const helloSchema = z.object({ name: z.string().trim().min(2, 'Enter your name').max(80), phone });
+
+// Customer says hello when they first open the shop (QR scan). Saved as a customer for the vendor.
+router.post('/:slug/hello', writeLimiter, h(async (req, res) => {
+  const b = await loadShop(req.params.slug);
+  const d = helloSchema.parse(req.body);
+  const existing = await prisma.customer.findFirst({ where: { businessId: b.id, phone: d.phone } });
+  if (!existing) {
+    const c = await prisma.customer.create({ data: { businessId: b.id, name: d.name, phone: d.phone, tags: ['Online'] } });
+    await logActivity(b.id, null, 'shop_visit', 'customer', c.id);
+  }
+  res.json({ ok: true });
+}));
+
+// "My Orders": only orders whose secret tokens are saved on this phone.
+router.post('/my-orders', h(async (req, res) => {
+  const tokens = Array.isArray(req.body?.tokens) ? req.body.tokens.filter((t) => /^[a-f0-9]{32}$/.test(String(t))).slice(0, 50) : [];
+  if (!tokens.length) return res.json({ orders: [] });
+  const orders = await prisma.shopOrder.findMany({
+    where: { token: { in: tokens } },
+    select: { token: true, number: true, kind: true, status: true, total: true, paymentStatus: true, createdAt: true, preferredAt: true, _count: { select: { items: true } } },
+    orderBy: { createdAt: 'desc' },
+  });
+  res.json({ orders: orders.map(({ _count, ...o }) => ({ ...o, itemCount: _count.items })) });
+}));
+
 const enquirySchema = z.object({
   name: z.string().trim().min(2, 'Enter your name').max(80),
   phone,

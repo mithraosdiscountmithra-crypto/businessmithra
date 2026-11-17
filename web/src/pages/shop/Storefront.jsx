@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../api.js';
-import { inr } from '../../lib/format.js';
+import { fmtDateTime, inr } from '../../lib/format.js';
+import { addOrderToken, clearMe, getMe, getOrderTokens, setMe } from '../../lib/shopDevice.js';
 
 const CART_KEY = (slug) => `bm_cart_${slug}`;
 const loadCart = (slug) => {
@@ -83,7 +84,10 @@ export default function Storefront() {
   const [cat, setCat] = useState('');
   const [q, setQ] = useState('');
   const [sheet, setSheet] = useState(null); // 'cart' | {type:'item'|'book'|'ask', item}
-  const [form, setForm] = useState({ name: '', phone: '', address: '', note: '', fulfilment: 'pickup', preferredAt: '', message: '' });
+  const saved = getMe();
+  const [me, setMeState] = useState(saved);
+  const [form, setForm] = useState({ name: saved?.name || '', phone: saved?.phone || '', address: saved?.address || '', note: '', fulfilment: 'pickup', preferredAt: '', message: '' });
+  const [myOrders, setMyOrders] = useState(null);
   const [busy, setBusy] = useState(false);
   const [formErr, setFormErr] = useState('');
   const [sent, setSent] = useState(false);
@@ -115,6 +119,33 @@ export default function Storefront() {
   const dec = (id) => setCart((c) => ({ ...c, [id]: Math.max(0, (c[id] || 0) - 1) }));
   const setF = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
+  const sayHello = async (e) => {
+    e.preventDefault();
+    setFormErr('');
+    setBusy(true);
+    try {
+      await api(`/shop/${slug}/hello`, { method: 'POST', body: { name: form.name, phone: form.phone } });
+      const m = { name: form.name.trim(), phone: form.phone.trim(), address: me?.address || '' };
+      setMe(m);
+      setMeState(m);
+    } catch (x) {
+      setFormErr(x.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openMyOrders = async () => {
+    setSheet('orders');
+    setMyOrders(null);
+    try {
+      const r = await api('/shop/my-orders', { method: 'POST', body: { tokens: getOrderTokens(slug) } });
+      setMyOrders(r.orders);
+    } catch {
+      setMyOrders([]);
+    }
+  };
+
   const placeOrder = async (e, kind, bookItem) => {
     e.preventDefault();
     setFormErr('');
@@ -128,6 +159,8 @@ export default function Storefront() {
         items: kind === 'booking' ? [{ itemId: bookItem.id, qty: 1 }] : cartLines.map((l) => ({ itemId: l.item.id, qty: l.qty })),
       };
       const r = await api(`/shop/${slug}/orders`, { method: 'POST', body });
+      addOrderToken(slug, r.token);
+      setMe({ name: form.name, phone: form.phone, address: form.address || me?.address || '' });
       if (kind === 'order') setCart({});
       navigate(`/o/${r.token}`);
     } catch (x) {
@@ -179,7 +212,14 @@ export default function Storefront() {
           {shop.phone && <a href={`tel:${shop.phone}`} className="h-10 px-4 rounded-xl bg-white border border-gray-300 font-bold flex items-center">Call</a>}
           {(shop.address || shop.city) && <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([shop.name, shop.address, shop.city].filter(Boolean).join(', '))}`} target="_blank" rel="noreferrer" className="h-10 px-4 rounded-xl bg-white border border-gray-300 font-bold flex items-center">Directions</a>}
           <button type="button" onClick={() => { setSent(false); setSheet({ type: 'ask' }); }} className="h-10 px-4 rounded-xl bg-white border border-gray-300 font-bold">Ask a question</button>
+          {me && <button type="button" onClick={openMyOrders} className="h-10 px-4 rounded-xl bg-white border border-gray-300 font-bold">My Orders</button>}
         </div>
+        {me && (
+          <p className="max-w-5xl mx-auto px-4 pt-2 text-xs text-gray-600">
+            Namaste <strong>{me.name}</strong> ({me.phone}) ·{' '}
+            <button type="button" className="underline font-semibold" onClick={() => { clearMe(); setMeState(null); setForm((f) => ({ ...f, name: '', phone: '' })); }}>Not you?</button>
+          </p>
+        )}
         <div className="max-w-5xl mx-auto px-4 pt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
           {shop.timings && <span>🕒 {shop.timings}</span>}
           {shop.city && <span>📍 {[shop.address, shop.city].filter(Boolean).join(', ')}</span>}
@@ -305,6 +345,48 @@ export default function Storefront() {
             <button type="submit" disabled={busy} className="h-14 rounded-2xl text-white font-bold text-base disabled:opacity-60" style={{ background: color }}>{busy ? 'Booking…' : 'Request booking'}</button>
             <p className="text-xs text-center text-muted">Shop vaallu time confirm chesi meeku cheptaru.</p>
           </form>
+        </Sheet>
+      )}
+
+      {!me && (
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60" role="dialog" aria-modal="true" aria-label="Welcome">
+          <form onSubmit={sayHello} className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl p-6 flex flex-col gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-14 h-14 rounded-2xl overflow-hidden flex items-center justify-center bg-gray-100 shrink-0">
+                {shop.logo ? <img src={shop.logo} alt="" className="w-full h-full object-cover" /> : <span className="text-2xl font-extrabold" style={{ color }}>{shop.name.slice(0, 1)}</span>}
+              </div>
+              <div>
+                <h2 className="text-lg font-extrabold">Welcome to {shop.name}! 🙏</h2>
+                <p className="text-sm text-gray-600">Mee peru, mobile number cheppandi. Mee orders ee phone lo save avutayi.</p>
+              </div>
+            </div>
+            {contactFields}
+            {formErr && <p className="error-box" role="alert">{formErr}</p>}
+            <button type="submit" disabled={busy} className="h-14 rounded-2xl text-white font-bold text-base disabled:opacity-60" style={{ background: color }}>{busy ? 'Please wait…' : 'Continue to shop'}</button>
+            <p className="text-xs text-center text-muted">Mee number {shop.name} tho matrame share avutundi.</p>
+          </form>
+        </div>
+      )}
+
+      {sheet === 'orders' && (
+        <Sheet title="My Orders" onClose={() => setSheet(null)}>
+          {myOrders === null ? <p className="text-muted">Loading…</p> : myOrders.length === 0 ? (
+            <p className="text-sm text-muted py-6 text-center">Ee phone nunchi inka orders levu.</p>
+          ) : (
+            <ul className="flex flex-col divide-y divide-gray-100">
+              {myOrders.map((o) => (
+                <li key={o.token}>
+                  <a href={`/o/${o.token}`} onClick={(e) => { e.preventDefault(); navigate(`/o/${o.token}`); }} className="flex items-center justify-between gap-3 py-3">
+                    <div>
+                      <p className="font-bold">{o.number} <span className="text-xs font-semibold text-muted">· {o.kind === 'booking' ? 'Booking' : `${o.itemCount} item${o.itemCount > 1 ? 's' : ''}`}</span></p>
+                      <p className="text-xs text-muted">{fmtDateTime(o.createdAt)} · {{ new: 'Received', confirmed: 'Confirmed', ready: 'Ready', completed: 'Completed', cancelled: 'Cancelled' }[o.status]}{o.paymentStatus === 'paid' ? ' · Paid' : ''}</p>
+                    </div>
+                    <span className="font-extrabold">{inr(o.total)} →</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
         </Sheet>
       )}
 
