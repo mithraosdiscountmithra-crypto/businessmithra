@@ -83,6 +83,7 @@ export const OPS_NAV = [
   { to: '/ops/purchases', label: 'Purchases' },
   { to: '/ops/purchase-returns', label: 'Purchase Returns' },
   { to: '/ops/suppliers', label: 'Suppliers' },
+  { to: '/ops/labels', label: 'Barcode Labels' },
 ];
 
 export function Modal({ title, onClose, children, wide = false }) {

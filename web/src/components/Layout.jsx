@@ -38,6 +38,11 @@ function Sidebar({ onNavigate }) {
           <Icon name="accounts" /> ⚡ Send Bill
         </NavLink>
       )}
+      {me.modules.includes('sales') && me.permissions.sales?.add && (
+        <NavLink to="/pos" className={linkClass} onClick={onNavigate}>
+          <Icon name="sales" /> 🧾 POS Counter
+        </NavLink>
+      )}
       {visible.map((m) => (
         <NavLink
           key={m}

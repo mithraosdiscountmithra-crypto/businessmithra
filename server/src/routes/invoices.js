@@ -102,6 +102,70 @@ const quickSchema = z.object({
   paidMode: z.enum([...MODES, '']).optional().nullable(),
 });
 
+// ── POS: counter billing from the item list (stock goes out, split payments) ──
+const posSchema = z.object({
+  phone: z.string().trim().regex(/^[6-9]\d{9}$/, 'Enter a valid 10-digit mobile number').optional().nullable().or(z.literal('')).transform((v) => v || null),
+  customerName: z.string().trim().max(80).optional().nullable().or(z.literal('')).transform((v) => v || null),
+  lines: z.array(z.object({
+    itemId: z.string().min(1),
+    variantId: z.string().optional().nullable(),
+    qty: z.coerce.number().positive(),
+  })).min(1, 'Add at least one item').max(200),
+  discount: z.coerce.number().min(0).default(0),
+  payments: z.array(z.object({ mode: z.enum(MODES), amount: z.coerce.number().positive() })).max(4).default([]),
+});
+
+router.post('/pos', requirePermission('sales', 'add'), h(async (req, res) => {
+  const d = posSchema.parse(req.body);
+  const ids = [...new Set(d.lines.map((l) => l.itemId))];
+  const items = await prisma.item.findMany({ where: { id: { in: ids }, businessId: req.businessId } });
+  const lines = d.lines.map((l) => {
+    const it = items.find((x) => x.id === l.itemId);
+    if (!it) throw new HttpError(400, 'Item not found');
+    const v = l.variantId && Array.isArray(it.variants) ? it.variants.find((x) => x.id === l.variantId) : null;
+    return { itemId: it.id, variantId: v?.id || null, name: v ? `${it.name} (${v.name})` : it.name, hsn: it.hsn, unit: it.unit, qty: l.qty, rate: num(v ? v.price : it.price), taxRate: num(it.taxRate) };
+  });
+  const c = computeDoc({ items: lines, discount: d.discount, interState: false });
+  const paid = r2(d.payments.reduce((a, p) => a + p.amount, 0));
+  if (paid > c.total + 0.009) throw new HttpError(400, `Payment (₹${paid}) is more than bill total (₹${c.total})`);
+
+  let customer;
+  if (d.phone) {
+    customer = await prisma.customer.findFirst({ where: { businessId: req.businessId, phone: d.phone } });
+    if (!customer) customer = await prisma.customer.create({ data: { businessId: req.businessId, name: d.customerName || `Customer ${d.phone.slice(-4)}`, phone: d.phone } });
+  } else {
+    customer = await prisma.customer.findFirst({ where: { businessId: req.businessId, name: 'Walk-in Customer', phone: null } });
+    if (!customer) customer = await prisma.customer.create({ data: { businessId: req.businessId, name: 'Walk-in Customer' } });
+  }
+  if (!d.phone && paid < c.total - 0.009) throw new HttpError(400, 'Credit (udhaar) bill ki customer mobile number ivvandi');
+
+  const today = istToday();
+  const inv = await prisma.$transaction(async (tx) => {
+    const b = await tx.business.update({ where: { id: req.businessId }, data: { nextInvoiceNo: { increment: 1 } } });
+    const created = await tx.invoice.create({
+      data: {
+        businessId: req.businessId, number: `${b.invoicePrefix}${b.nextInvoiceNo - 1}`, customerId: customer.id, date: dateOnly(today),
+        interState: false, subtotal: c.subtotal, discount: c.discount, taxTotal: c.taxTotal, cgst: c.cgst, sgst: c.sgst, igst: c.igst,
+        roundOff: c.roundOff, total: c.total, notes: 'POS',
+        shareToken: crypto.randomBytes(16).toString('hex'), createdById: req.user.id, items: { create: c.lines },
+      },
+    });
+    await applyLines(tx, { businessId: req.businessId, refType: 'invoice', refId: created.id, lines: c.lines, sign: -1, reason: 'sale', userId: req.user.id });
+    for (const p of d.payments) {
+      const accountId = await defaultAccountId(tx, req.businessId, p.mode);
+      await tx.payment.create({ data: { businessId: req.businessId, invoiceId: created.id, customerId: customer.id, accountId, amount: p.amount, date: dateOnly(today), mode: p.mode, createdById: req.user.id } });
+    }
+    await recalcInvoice(tx, created.id);
+    return created;
+  });
+  await logActivity(req.businessId, req.user.id, 'pos_bill', 'invoice', inv.id);
+  const [full, business] = await Promise.all([
+    prisma.invoice.findUnique({ where: { id: inv.id }, include }),
+    prisma.business.findUnique({ where: { id: req.businessId } }),
+  ]);
+  res.status(201).json({ invoice: full, business });
+}));
+
 router.post('/quick', requirePermission('sales', 'add'), h(async (req, res) => {
   const d = quickSchema.parse(req.body);
   let customer = await prisma.customer.findFirst({ where: { businessId: req.businessId, phone: d.phone } });
