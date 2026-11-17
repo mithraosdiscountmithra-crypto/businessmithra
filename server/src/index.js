@@ -128,6 +128,8 @@ app.get('/sitemap.xml', async (req, res, next) => {
 const webDist = path.resolve(__dirname, '../../web/dist');
 if (fs.existsSync(webDist)) {
   const indexHtml = fs.readFileSync(path.join(webDist, 'index.html'), 'utf8');
+  // The service worker must always be fresh so app updates reach phones quickly.
+  app.get('/sw.js', (req, res) => res.set('Cache-Control', 'no-cache').sendFile(path.join(webDist, 'sw.js')));
   app.use(express.static(webDist, { index: false, maxAge: '1h' }));
 
   // Shop pages get their own title, description, preview image and business details for Google & WhatsApp.
@@ -167,6 +169,7 @@ if (fs.existsSync(webDist)) {
       console.error('shop meta failed', e.message);
     }
     if (ownDomain) html = html.replace('</head>', `<meta name="bm-shop" content="${esc(slug)}" />\n  </head>`);
+    html = html.replace('href="/manifest.webmanifest"', `href="/api/shop/${esc(String(slug).toLowerCase())}/manifest.webmanifest${ownDomain ? '?own=1' : ''}"`);
     res.set('Cache-Control', 'no-cache').type('html').send(html);
   };
 

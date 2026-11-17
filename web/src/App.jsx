@@ -10,6 +10,9 @@ import Purchases from './pages/ops/Purchases.jsx';
 import Suppliers from './pages/ops/Suppliers.jsx';
 import Returns from './pages/sales/Returns.jsx';
 import POS from './pages/sales/POS.jsx';
+import ItemReport from './pages/sales/ItemReport.jsx';
+import CustomerStatement from './pages/sales/CustomerStatement.jsx';
+import GstReturns from './pages/accounts/GstReturns.jsx';
 import Labels from './pages/ops/Labels.jsx';
 import Settings from './pages/Settings.jsx';
 import Staff from './pages/Staff.jsx';
@@ -127,6 +130,9 @@ export default function App() {
       <Route path="/ops/stock" element={<Private module="operations"><Stock /></Private>} />
       <Route path="/ops/purchases" element={<Private module="operations"><Purchases key="b" kind="bill" /></Private>} />
       <Route path="/ops/purchase-returns" element={<Private module="operations"><Purchases key="r" kind="return" /></Private>} />
+      <Route path="/sales/reports/items" element={<Private module="sales"><ItemReport /></Private>} />
+      <Route path="/sales/customers/:id/statement" element={<Private module="sales"><CustomerStatement /></Private>} />
+      <Route path="/accounts/gst-returns" element={<Private module="accounts"><GstReturns /></Private>} />
       <Route path="/pos" element={<Private module="sales"><POS /></Private>} />
       <Route path="/ops/labels" element={<Private module="operations"><Labels /></Private>} />
       <Route path="/ops/suppliers" element={<Private module="operations"><Suppliers /></Private>} />

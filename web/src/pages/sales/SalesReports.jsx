@@ -11,6 +11,7 @@ export default function SalesReports() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader title="Sales & Customers">
+        <Link to="/sales/reports/items" className="btn-primary">📦 Item-wise profit</Link>
         <button type="button" className="btn-ghost" onClick={() => window.print()}>Print</button>
       </PageHeader>
       <SubNav items={SALES_NAV} />

@@ -44,6 +44,7 @@ export default function CustomerDetail() {
       <PageHeader title={c.name} subtitle={[c.phone, c.city].filter(Boolean).join(' · ')}>
         {c.phone && <a className="btn bg-green-100 text-green-800" href={waLink(c.phone, `Namaste ${c.name} garu,`)} target="_blank" rel="noreferrer">WhatsApp</a>}
         {c.phone && <a className="btn-ghost" href={`tel:${c.phone}`}>Call</a>}
+        <Link className="btn-ghost" to={`/sales/customers/${c.id}/statement`}>📒 Statement</Link>
         {can.add && <Link className="btn-primary" to={`/sales/invoices/new?customer=${c.id}`}>New Invoice</Link>}
       </PageHeader>
       <ErrorBox>{err}</ErrorBox>

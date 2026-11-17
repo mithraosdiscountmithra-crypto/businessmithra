@@ -11,6 +11,7 @@ import { otpEnabled, sendOtp, shopPhone, verifyOtp } from '../lib/otp.js';
 import { accessState, getPlans } from '../lib/plans.js';
 import { activeBenefits } from '../lib/membership.js';
 import { available } from '../lib/stock.js';
+import { sendTemplate } from '../lib/aisensy.js';
 
 const router = Router();
 
@@ -167,6 +168,9 @@ router.post('/:slug/orders', writeLimiter, h(async (req, res) => {
     });
   });
   await logActivity(b.id, null, 'online_order', 'shop_order', order.id);
+  // WhatsApp alert to the shop owner (AiSensy template: {{1}} shop, {{2}} order no, {{3}} customer, {{4}} details).
+  const what = d.kind === 'table' ? `Table for ${d.guests || ''}` : d.kind === 'booking' ? 'Booking' : `₹${num(total)} · ${d.fulfilment === 'delivery' ? 'Delivery' : 'Pickup'}`;
+  sendTemplate({ campaignEnv: 'AISENSY_ORDER_CAMPAIGN', phone: b.orderAlertPhone || b.phone, userName: b.name, params: [b.name, order.number, `${d.name} (${d.phone})`, what] }).catch(() => {});
 
   // Save the delivery address for this verified mobile, for next time.
   const verified = shopPhone(req);
@@ -317,6 +321,21 @@ router.get('/order/:token', h(async (req, res) => {
     },
     shop: { ...publicBusiness(b), upiLink: upi, upiId: upi ? b.upiId : null },
   });
+}));
+
+// Install-as-app manifest for a shop (customers get the shop's own icon on their home screen).
+router.get('/:slug/manifest.webmanifest', h(async (req, res) => {
+  const b = await prisma.business.findUnique({ where: { slug: String(req.params.slug).toLowerCase() } });
+  if (!b || !b.shopEnabled) throw new HttpError(404, 'Shop not found');
+  const start = req.query.own ? '/' : `/s/${b.slug}`;
+  const icons = [
+    { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+    { src: '/icon-512.png', sizes: '512x512', type: 'image/png' },
+  ];
+  res.type('application/manifest+json').set('Cache-Control', 'public, max-age=3600').send(JSON.stringify({
+    name: b.name, short_name: b.name.slice(0, 12), start_url: start, scope: start, display: 'standalone',
+    background_color: '#ffffff', theme_color: b.shopColor || '#3730A3', icons,
+  }));
 }));
 
 export default router;

@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useState } from 'react';
 import { ACCOUNTS_NAV, Bars, ErrorBox, PageHeader, RangePicker, Stat, SubNav, useApi } from '../../components/ui.jsx';
 import { fmtDate, inr, MODE_LABEL, monthStart, short, today } from '../../lib/format.js';
@@ -13,6 +14,7 @@ export default function AccountsReports() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader title="Accounts">
+        <Link to="/accounts/gst-returns" className="btn-primary">GSTR-1 export</Link>
         <button type="button" className="btn-ghost" onClick={() => window.print()}>Print</button>
       </PageHeader>
       <SubNav items={ACCOUNTS_NAV} />

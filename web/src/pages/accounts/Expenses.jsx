@@ -5,6 +5,7 @@ import { useAuth } from '../../auth.jsx';
 import { ACCOUNTS_NAV, Empty, ErrorBox, Field, Modal, PageHeader, RangePicker, SubNav, useApi, useForm } from '../../components/ui.jsx';
 import Icon from '../../components/Icon.jsx';
 import { fmtDate, inr, isoDay, MODE_LABEL, monthStart, today } from '../../lib/format.js';
+import { d10, downloadCsv } from '../../lib/csv.js';
 
 function ExpenseForm({ expense, categories, accounts, onClose, onSaved }) {
   const [f, , set] = useForm({
@@ -88,6 +89,8 @@ export default function Expenses() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader title="Accounts">
+        {data?.expenses?.length > 0 && <button type="button" className="btn-ghost" onClick={() => downloadCsv(`expenses-${range.from}-to-${range.to}`, ['Date', 'Category', 'Paid to', 'Bill no', 'Mode', 'GST', 'Amount', 'Notes'],
+          data.expenses.map((e) => [d10(e.date), e.category, e.vendorName, e.billNo, e.mode, Number(e.taxAmount), Number(e.amount), e.notes]))}>⬇️ Excel</button>}
         {can.add && <button type="button" className="btn-primary" onClick={() => setEditing('new')}><Icon name="plus" size={18} /> Add Expense</button>}
       </PageHeader>
       <SubNav items={ACCOUNTS_NAV} />

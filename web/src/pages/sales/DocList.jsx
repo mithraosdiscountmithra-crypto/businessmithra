@@ -4,6 +4,7 @@ import { useAuth } from '../../auth.jsx';
 import { Badge, Empty, ErrorBox, PageHeader, SALES_NAV, SubNav, invoiceDisplayStatus, useApi } from '../../components/ui.jsx';
 import Icon from '../../components/Icon.jsx';
 import { fmtDate, inr } from '../../lib/format.js';
+import { d10, downloadCsv } from '../../lib/csv.js';
 
 const INVOICE_FILTERS = [['', 'All'], ['due', 'Unpaid'], ['overdue', 'Overdue'], ['paid', 'Paid'], ['cancelled', 'Cancelled']];
 const QUOTE_FILTERS = [['', 'All'], ['draft', 'Draft'], ['sent', 'Sent'], ['accepted', 'Accepted'], ['converted', 'Invoiced'], ['rejected', 'Rejected']];
@@ -26,6 +27,8 @@ export default function DocList({ kind }) {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader title="Sales & Customers">
+        {list.length > 0 && <button type="button" className="btn-ghost" onClick={() => downloadCsv(isInvoice ? 'invoices' : 'quotations', ['Number', 'Date', 'Customer', 'Phone', 'Status', 'Total', 'Paid', 'Balance'],
+          list.map((i) => [i.number, d10(i.date), i.customer?.name, i.customer?.phone, i.status, Number(i.total), Number(i.amountPaid || 0), isInvoice ? Number(i.total) - Number(i.amountPaid) : '']))}>⬇️ Excel</button>}
         {can.add && <Link className="btn-primary" to={`${base}/new`}><Icon name="plus" size={18} /> New {isInvoice ? 'Invoice' : 'Quotation'}</Link>}
       </PageHeader>
       <SubNav items={SALES_NAV} />

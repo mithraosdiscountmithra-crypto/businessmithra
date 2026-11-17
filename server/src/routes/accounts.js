@@ -260,4 +260,59 @@ router.get('/reports', requirePermission('accounts', 'view'), h(async (req, res)
   });
 }));
 
+// GSTR-1 helper data: B2B invoices, B2C summary by rate, HSN summary, credit notes.
+router.get('/gstr1', requirePermission('accounts', 'view'), h(async (req, res) => {
+  const r = parseRange(req.query);
+  const b = req.businessId;
+  const [business, invoices, notes] = await Promise.all([
+    prisma.business.findUnique({ where: { id: b }, select: { name: true, gstin: true, state: true } }),
+    prisma.invoice.findMany({
+      where: { businessId: b, status: { not: 'cancelled' }, date: { gte: r.gte, lt: r.lt } },
+      include: { customer: { select: { name: true, gstin: true, state: true } }, items: true }, orderBy: { date: 'asc' },
+    }),
+    prisma.creditNote.findMany({ where: { businessId: b, date: { gte: r.gte, lt: r.lt } }, include: { customer: { select: { name: true, gstin: true } }, items: true } }),
+  ]);
+  const b2b = [];
+  const b2c = {};
+  const hsn = {};
+  for (const inv of invoices) {
+    const sub = num(inv.subtotal);
+    const f = sub > 0 ? (sub - num(inv.discount)) / sub : 1;
+    const byRate = {};
+    for (const it of inv.items) {
+      const taxable = num(it.amount) * f;
+      const tax = num(it.taxAmount);
+      const k = String(num(it.taxRate));
+      (byRate[k] ||= { rate: num(it.taxRate), taxable: 0, tax: 0 });
+      byRate[k].taxable += taxable;
+      byRate[k].tax += tax;
+      const hk = `${it.hsn || 'NA'}|${num(it.taxRate)}`;
+      const hx = (hsn[hk] ||= { hsn: it.hsn || '', description: it.name, uqc: (it.unit || 'NOS').toUpperCase(), qty: 0, rate: num(it.taxRate), taxable: 0, igst: 0, cgst: 0, sgst: 0 });
+      hx.qty += num(it.qty);
+      hx.taxable += taxable;
+      if (inv.interState) hx.igst += tax;
+      else { hx.cgst += tax / 2; hx.sgst += tax / 2; }
+    }
+    for (const x of Object.values(byRate)) {
+      const split = inv.interState ? { igst: r2(x.tax), cgst: 0, sgst: 0 } : { igst: 0, cgst: r2(x.tax / 2), sgst: r2(x.tax / 2) };
+      if (inv.customer.gstin) {
+        b2b.push({ gstin: inv.customer.gstin, name: inv.customer.name, number: inv.number, date: inv.date, value: num(inv.total), pos: inv.customer.state || business.state || '', rate: x.rate, taxable: r2(x.taxable), ...split });
+      } else {
+        const k = `${x.rate}|${inv.interState ? 'inter' : 'intra'}`;
+        const c = (b2c[k] ||= { rate: x.rate, type: inv.interState ? 'Inter-state' : 'Intra-state', taxable: 0, igst: 0, cgst: 0, sgst: 0 });
+        c.taxable = r2(c.taxable + x.taxable);
+        c.igst = r2(c.igst + split.igst);
+        c.cgst = r2(c.cgst + split.cgst);
+        c.sgst = r2(c.sgst + split.sgst);
+      }
+    }
+  }
+  res.json({
+    range: { from: r.from, to: r.to }, business,
+    b2b, b2c: Object.values(b2c).sort((a, c) => a.rate - c.rate),
+    hsn: Object.values(hsn).map((x) => ({ ...x, qty: Math.round(x.qty * 1000) / 1000, taxable: r2(x.taxable), igst: r2(x.igst), cgst: r2(x.cgst), sgst: r2(x.sgst) })),
+    creditNotes: notes.map((n) => ({ number: n.number, date: n.date, name: n.customer.name, gstin: n.customer.gstin || '', taxable: num(n.subtotal), igst: num(n.igst), cgst: num(n.cgst), sgst: num(n.sgst), total: num(n.total) })),
+  });
+}));
+
 export default router;

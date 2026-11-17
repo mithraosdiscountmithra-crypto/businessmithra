@@ -27,7 +27,7 @@ async function ensureSlug(b) {
 
 const shopFields = (b) => ({
   slug: b.slug, shopEnabled: b.shopEnabled, shopTagline: b.shopTagline || '', shopAbout: b.shopAbout || '', shopLogo: b.shopLogo || '',
-  shopCover: b.shopCover || '', shopColor: b.shopColor, shopTimings: b.shopTimings || '', upiId: b.upiId || '',
+  shopCover: b.shopCover || '', shopColor: b.shopColor, shopTimings: b.shopTimings || '', upiId: b.upiId || '', orderAlertPhone: b.orderAlertPhone || '',
   allowPickup: b.allowPickup, allowDelivery: b.allowDelivery, deliveryFee: num(b.deliveryFee), minOrder: num(b.minOrder), allowBooking: b.allowBooking,
   allowTable: b.allowTable, shopLat: b.shopLat, shopLng: b.shopLng, shopMapUrl: b.shopMapUrl || '',
   customDomain: b.customDomain || '', customDomainStatus: b.customDomainStatus || null,
@@ -45,6 +45,7 @@ const settingsSchema = z.object({
   shopCover: url,
   shopColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Pick a colour'),
   shopTimings: z.string().trim().max(120).transform((v) => v || null),
+  orderAlertPhone: z.string().trim().refine((v) => v === '' || /^[6-9]\d{9}$/.test(v), 'Enter a valid 10-digit WhatsApp number').transform((v) => v || null).optional(),
   upiId: z.string().trim().max(60).refine((v) => v === '' || /^[\w.\-]{2,}@[a-zA-Z]{2,}$/.test(v), 'Enter a valid UPI ID like shop@okaxis').transform((v) => v || null),
   allowPickup: z.boolean(),
   allowDelivery: z.boolean(),

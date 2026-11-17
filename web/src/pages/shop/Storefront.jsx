@@ -4,6 +4,7 @@ import { api } from '../../api.js';
 import { fmtDate, fmtDateTime, inr } from '../../lib/format.js';
 import UpiPay from '../../components/UpiPay.jsx';
 import { hostShop } from '../../lib/hostShop.js';
+import { InstallButton } from '../../lib/install.js';
 import { addOrderToken, clearMe, getMe, getOrderTokens, getShopToken, setMe, setShopToken } from '../../lib/shopDevice.js';
 
 const CART_KEY = (slug) => `bm_cart_${slug}`;
@@ -112,6 +113,11 @@ function ItemCard({ it, cart, color, onAdd, onDec, onBook, onAsk, onOpen }) {
 export default function Storefront() {
   const params = useParams();
   const slug = params.slug || hostShop();
+  useEffect(() => {
+    // "Add to home screen" should open this shop, not the vendor app.
+    const link = document.querySelector('link[rel="manifest"]');
+    if (link && slug) link.setAttribute('href', `/api/shop/${slug}/manifest.webmanifest${hostShop() ? '?own=1' : ''}`);
+  }, [slug]);
   const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [err, setErr] = useState('');
@@ -437,6 +443,7 @@ export default function Storefront() {
           )}
           {shop.allowTable && <button type="button" onClick={() => { setFormErr(''); setSheet('table'); }} className="h-10 px-4 rounded-xl text-white font-bold" style={{ background: color }}>🍽️ Book a table</button>}
           <button type="button" onClick={() => { setSent(false); setSheet({ type: 'ask' }); }} className="h-10 px-4 rounded-xl bg-white border border-gray-300 font-bold">Ask a question</button>
+          <InstallButton className="h-10 px-4 rounded-xl bg-white border border-gray-300 font-bold" label="📲 Add to home screen" />
           {(me || getOrderTokens(slug).length > 0) && <button type="button" onClick={openMyOrders} className="h-10 px-4 rounded-xl bg-white border border-gray-300 font-bold">My Orders</button>}
         </div>
         {me && (

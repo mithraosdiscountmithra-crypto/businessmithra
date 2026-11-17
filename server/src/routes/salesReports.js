@@ -92,4 +92,50 @@ router.get('/', h(async (req, res) => {
   });
 }));
 
+// Item-wise sales and profit (cost = item's cost price).
+router.get('/items', h(async (req, res) => {
+  const b = req.businessId;
+  const r = parseRange(req.query);
+  const live = { businessId: b, status: { not: 'cancelled' }, date: { gte: r.gte, lt: r.lt } };
+  const [lines, returns, items] = await Promise.all([
+    prisma.invoiceItem.findMany({ where: { invoice: live }, select: { itemId: true, variantId: true, name: true, qty: true, amount: true, invoice: { select: { subtotal: true, discount: true } } } }),
+    prisma.creditNoteItem.findMany({ where: { creditNote: { businessId: b, date: { gte: r.gte, lt: r.lt } } }, select: { itemId: true, variantId: true, name: true, qty: true, amount: true } }),
+    prisma.item.findMany({ where: { businessId: b }, select: { id: true, name: true, category: true, costPrice: true } }),
+  ]);
+  const byId = Object.fromEntries(items.map((i) => [i.id, i]));
+  const rows = {};
+  const row = (l) => {
+    const key = l.itemId ? `${l.itemId}|${l.variantId || ''}` : `name:${l.name.toLowerCase()}`;
+    return (rows[key] ||= { key, name: l.name, category: byId[l.itemId]?.category || '', qty: 0, sales: 0, cost: 0, hasCost: Boolean(num(byId[l.itemId]?.costPrice)) });
+  };
+  for (const l of lines) {
+    const sub = num(l.invoice.subtotal);
+    const f = sub > 0 ? (sub - num(l.invoice.discount)) / sub : 1;
+    const x = row(l);
+    x.qty += num(l.qty);
+    x.sales += num(l.amount) * f;
+    x.cost += num(l.qty) * num(byId[l.itemId]?.costPrice);
+  }
+  for (const l of returns) {
+    const x = row(l);
+    x.qty -= num(l.qty);
+    x.sales -= num(l.amount);
+    x.cost -= num(l.qty) * num(byId[l.itemId]?.costPrice);
+  }
+  const out = Object.values(rows).map((x) => ({ ...x, qty: Math.round(x.qty * 1000) / 1000, sales: r2(x.sales), cost: r2(x.cost), profit: x.hasCost ? r2(x.sales - x.cost) : null }))
+    .sort((a, b2) => b2.sales - a.sales);
+  const cats = {};
+  for (const x of out) {
+    const c = (cats[x.category || 'Other'] ||= { category: x.category || 'Other', sales: 0, profit: 0 });
+    c.sales = r2(c.sales + x.sales);
+    c.profit = r2(c.profit + (x.profit || 0));
+  }
+  res.json({
+    range: { from: r.from, to: r.to },
+    items: out,
+    categories: Object.values(cats).sort((a, b2) => b2.sales - a.sales),
+    totals: { sales: r2(out.reduce((a, x) => a + x.sales, 0)), profit: r2(out.reduce((a, x) => a + (x.profit || 0), 0)), missingCost: out.filter((x) => x.profit === null).length },
+  });
+}));
+
 export default router;

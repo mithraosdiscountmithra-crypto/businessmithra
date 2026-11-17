@@ -3,6 +3,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
 import { MODULE_INFO, MODULE_ORDER } from '../constants.js';
 import Icon from './Icon.jsx';
+import { InstallButton } from '../lib/install.js';
 
 const linkClass = ({ isActive }) =>
   `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition ${
@@ -33,6 +34,7 @@ function Sidebar({ onNavigate }) {
       <NavLink to="/" end className={linkClass} onClick={onNavigate}>
         <Icon name="dashboard" /> Dashboard
       </NavLink>
+      <InstallButton className="mx-1 my-1 text-left text-sm font-semibold rounded-lg px-3 py-2 bg-white/10 text-white hover:bg-white/20" label="📲 Install BusinessMithra app" />
       {me.modules.includes('sales') && me.permissions.sales?.add && (
         <NavLink to="/bill" className={linkClass} onClick={onNavigate}>
           <Icon name="accounts" /> ⚡ Send Bill

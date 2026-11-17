@@ -53,6 +53,7 @@ model Business {
   shopMapUrl    String?
   nextOrderNo   Int            @default(1)
   nextCreditNo  Int            @default(1)
+  orderAlertPhone String?      // WhatsApp number for new-order alerts (default: business phone)
   membershipsEnabled Boolean   @default(false)
   customDomain       String?   // (unique, checked in code) vendor's own domain, e.g. www.srisaitextiles.in
   customDomainStatus String?   // requested, live

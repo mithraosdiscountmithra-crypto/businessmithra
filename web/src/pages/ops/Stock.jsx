@@ -3,6 +3,7 @@ import { api } from '../../api.js';
 import { useAuth } from '../../auth.jsx';
 import { Empty, ErrorBox, Field, Modal, OPS_NAV, PageHeader, Stat, SubNav, useApi } from '../../components/ui.jsx';
 import { fmtDateTime, inr } from '../../lib/format.js';
+import { downloadCsv } from '../../lib/csv.js';
 
 const REASON = { opening: 'Opening stock', purchase: 'Purchase', sale: 'Sale (bill)', order: 'Online order', return: 'Customer return', purchase_return: 'Return to supplier', adjust: 'Adjustment' };
 
@@ -79,7 +80,9 @@ export default function Stock() {
 
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader title="Operations" subtitle="Stock, purchases, suppliers" />
+      <PageHeader title="Operations" subtitle="Stock, purchases, suppliers">
+        {rows.length > 0 && <button type="button" className="btn-ghost" onClick={() => downloadCsv('stock', ['Item', 'Category', 'Stock', 'Unit', 'Cost', 'Value', 'Low'], rows.map((r) => [r.name, r.category, r.stock, r.unit, r.costPrice, r.value, r.isLow ? 'YES' : '']))}>⬇️ Excel</button>}
+      </PageHeader>
       <SubNav items={OPS_NAV} />
       <ErrorBox>{error}</ErrorBox>
       {data && (

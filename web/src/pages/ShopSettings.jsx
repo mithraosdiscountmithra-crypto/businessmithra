@@ -191,6 +191,7 @@ export default function ShopSettings() {
           {f.allowDelivery && <Field label="Delivery charge (₹)" id="sh-fee"><input id="sh-fee" type="number" min="0" step="1" className="input" value={f.deliveryFee} onChange={set('deliveryFee')} /></Field>}
           <Field label="Minimum order (₹)" id="sh-min"><input id="sh-min" type="number" min="0" step="1" className="input" value={f.minOrder} onChange={set('minOrder')} /></Field>
           <Field label="UPI ID (customers direct ga pay chestaru)" id="sh-upi" hint="e.g. srisai@okaxis"><input id="sh-upi" className="input" value={f.upiId} onChange={set('upiId')} /></Field>
+          <Field label="New order WhatsApp alert number" id="sh-alert" hint="Kotha order vaste ee number ki WhatsApp msg. Khaali ga unte business number."><input id="sh-alert" inputMode="numeric" maxLength={10} className="input" value={f.orderAlertPhone || ''} onChange={set('orderAlertPhone')} /></Field>
         </div>
       </section>
 

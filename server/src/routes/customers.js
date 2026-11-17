@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma, logActivity } from '../lib/prisma.js';
 import { h } from '../lib/route.js';
+import { parseRange } from '../lib/money.js';
 import { r2, num } from '../lib/money.js';
 import { HttpError, requireAuth, requirePermission } from '../middleware/auth.js';
 
@@ -66,6 +67,37 @@ router.get('/:id', requirePermission('sales', 'view'), h(async (req, res) => {
     stats: { totalPurchases, balanceDue, invoiceCount: live.length, lastPurchase: live[0]?.date || null },
     invoices, payments, followUps, leads,
   });
+}));
+
+// Account statement: bills, payments and returns with running balance.
+router.get('/:id/statement', requirePermission('sales', 'view'), h(async (req, res) => {
+  const c = await prisma.customer.findFirst({ where: { id: req.params.id, businessId: req.businessId } });
+  if (!c) throw new HttpError(404, 'Customer not found');
+  const r = parseRange(req.query);
+  const base = { businessId: req.businessId, customerId: c.id };
+  const [invs, pays, cns, business] = await Promise.all([
+    prisma.invoice.findMany({ where: { ...base, status: { not: 'cancelled' } }, select: { id: true, number: true, date: true, total: true } }),
+    prisma.payment.findMany({ where: base, select: { id: true, date: true, amount: true, mode: true, invoice: { select: { number: true } } } }),
+    prisma.creditNote.findMany({ where: base, select: { id: true, number: true, date: true, total: true, settle: true } }),
+    prisma.business.findUnique({ where: { id: req.businessId }, select: { name: true, phone: true, address: true, city: true, gstin: true } }),
+  ]);
+  // Refunded returns cancel themselves out (credit + money back), so only adjust/credit returns reduce the balance.
+  const all = [
+    ...invs.map((i) => ({ date: i.date, type: 'Bill', ref: i.number, debit: num(i.total), credit: 0 })),
+    ...pays.map((p) => ({ date: p.date, type: `Payment (${p.mode})`, ref: p.invoice?.number || '', debit: 0, credit: num(p.amount) })),
+    ...cns.filter((n) => n.settle !== 'refund').map((n) => ({ date: n.date, type: 'Return', ref: n.number, debit: 0, credit: num(n.total) })),
+  ].sort((a, b) => a.date - b.date || b.debit - a.debit);
+  let opening = 0;
+  const rows = [];
+  let bal = 0;
+  for (const x of all) {
+    if (x.date < r.gte) { opening = r2(opening + x.debit - x.credit); bal = opening; continue; }
+    if (x.date >= r.lt) continue;
+    bal = r2(bal + x.debit - x.credit);
+    rows.push({ ...x, balance: bal });
+  }
+  res.json({ customer: c, business, range: { from: r.from, to: r.to }, opening, closing: rows.length ? bal : opening, rows,
+    totals: { debit: r2(rows.reduce((a, x) => a + x.debit, 0)), credit: r2(rows.reduce((a, x) => a + x.credit, 0)) } });
 }));
 
 router.post('/', requirePermission('sales', 'add'), h(async (req, res) => {
