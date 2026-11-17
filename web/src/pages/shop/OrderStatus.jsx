@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { api } from '../../api.js';
 import { inr } from '../../lib/format.js';
 import { addOrderToken } from '../../lib/shopDevice.js';
+import UpiPay from '../../components/UpiPay.jsx';
 
 const STEPS = { order: ['new', 'confirmed', 'ready', 'completed'], booking: ['new', 'confirmed', 'completed'], table: ['new', 'confirmed', 'completed'] };
 const LABEL = { new: 'Order received', confirmed: 'Confirmed', ready: 'Ready', completed: 'Completed', cancelled: 'Cancelled' };
@@ -66,11 +67,7 @@ export default function OrderStatus() {
         )}
 
         {shop.upiLink && o.kind !== 'table' && Number(o.total) > 0 && (
-          <div className="bg-white rounded-3xl border border-gray-200 p-5 flex flex-col gap-2 text-center">
-            <p className="font-bold">Pay {inr(o.total)} by UPI</p>
-            <a href={shop.upiLink} className="h-12 rounded-xl text-white font-bold flex items-center justify-center" style={{ background: color }}>Pay with GPay / PhonePe / Paytm</a>
-            <p className="text-xs text-muted">UPI ID: <strong>{shop.upiId}</strong> · Pay chesina screenshot WhatsApp lo pampandi.</p>
-          </div>
+          <UpiPay upiLink={shop.upiLink} upiId={shop.upiId} amountLabel={inr(o.total)} color={color} />
         )}
         {o.paymentStatus === 'paid' && <p className="ok-box text-center font-semibold">Payment received. Thank you!</p>}
 

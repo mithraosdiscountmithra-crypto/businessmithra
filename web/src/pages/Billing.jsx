@@ -4,6 +4,7 @@ import { useAuth } from '../auth.jsx';
 import { ErrorBox, Field, Modal, PageHeader, useApi } from '../components/ui.jsx';
 import { MODULE_INFO } from '../constants.js';
 import { fmtDate, fmtDateTime, inr } from '../lib/format.js';
+import UpiPay from '../components/UpiPay.jsx';
 
 const STATUS = { pending: ['Waiting for approval', 'bg-amber-100 text-amber-900'], approved: ['Approved', 'bg-green-100 text-green-800'], rejected: ['Rejected', 'bg-red-100 text-red-800'] };
 const MODE = { cash: 'Cash', upi: 'UPI', bank: 'Bank transfer' };
@@ -39,7 +40,8 @@ function RequestForm({ plan, cycle, payTo, onClose, onSent }) {
         <div className="text-sm flex flex-col gap-1.5">
           <p className="font-bold">Ela pay cheyyali:</p>
           <p>💵 <strong>Cash:</strong> BusinessMithra team ki direct ga ivvandi.</p>
-          {payTo.upi && <p>📱 <strong>UPI:</strong> {payTo.upi} {upiLink && <a href={upiLink} className="ml-1 font-bold text-brand underline">Pay now</a>}</p>}
+          {payTo.upi && <p>📱 <strong>UPI:</strong> {payTo.upi}</p>}
+          {upiLink && <UpiPay upiLink={upiLink} upiId={payTo.upi} amountLabel={inr(amount)} />}
           {payTo.phone && <p>📞 Help: <a className="font-semibold text-brand" href={`tel:${payTo.phone}`}>{payTo.phone}</a></p>}
         </div>
         <Field label="Meeru ela pay chesaru?" id="b-mode">
