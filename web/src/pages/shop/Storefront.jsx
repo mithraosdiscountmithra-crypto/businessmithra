@@ -121,6 +121,14 @@ export default function Storefront() {
   const [form, setForm] = useState({ name: saved?.name || '', phone: saved?.phone || '', address: saved?.address || '', note: '', fulfilment: 'pickup', preferredAt: '', message: '' });
   const [myOrders, setMyOrders] = useState(null);
   const [otpStep, setOtpStep] = useState(false);
+  const [addrs, setAddrs] = useState([]);
+  const [addrSel, setAddrSel] = useState('new');
+  const [loc, setLoc] = useState(saved?.lat ? { lat: saved.lat, lng: saved.lng } : null);
+  const [locBusy, setLocBusy] = useState(false);
+  const [locErr, setLocErr] = useState('');
+  const [landmark, setLandmark] = useState(saved?.landmark || '');
+  const [addrLabel, setAddrLabel] = useState('Home');
+  const [saveAddr, setSaveAddr] = useState(true);
   const [otp, setOtp] = useState('');
   const [busy, setBusy] = useState(false);
   const [formErr, setFormErr] = useState('');
@@ -215,6 +223,66 @@ export default function Storefront() {
     }
   };
 
+  const authHeaders = () => {
+    const t = getShopToken();
+    return t ? { Authorization: `Bearer ${t}` } : {};
+  };
+
+  const openCart = async () => {
+    setSheet('cart');
+    if (!getShopToken()) return;
+    try {
+      const r = await api('/shop/me/addresses', { headers: authHeaders() });
+      setAddrs(r.addresses);
+      if (r.addresses.length && addrSel === 'new' && !form.address) pickAddr(r.addresses[0]);
+    } catch {
+      /* not logged in with OTP */
+    }
+  };
+
+  const pickAddr = (a) => {
+    setAddrSel(a.id);
+    setForm((f) => ({ ...f, address: a.address }));
+    setLandmark(a.landmark || '');
+    setLoc(a.lat ? { lat: a.lat, lng: a.lng } : null);
+    setSaveAddr(false);
+  };
+
+  const newAddr = () => {
+    setAddrSel('new');
+    setForm((f) => ({ ...f, address: '' }));
+    setLandmark('');
+    setLoc(null);
+    setSaveAddr(true);
+  };
+
+  const removeAddr = async (a) => {
+    try {
+      await api(`/shop/me/addresses/${a.id}`, { method: 'DELETE', headers: authHeaders() });
+      setAddrs((x) => x.filter((y) => y.id !== a.id));
+      if (addrSel === a.id) newAddr();
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const useMyLocation = () => {
+    setLocErr('');
+    if (!navigator.geolocation) return setLocErr('Mee phone location support cheyyatledu. Address type cheyyandi.');
+    setLocBusy(true);
+    navigator.geolocation.getCurrentPosition(
+      (p) => {
+        setLoc({ lat: Number(p.coords.latitude.toFixed(6)), lng: Number(p.coords.longitude.toFixed(6)), acc: Math.round(p.coords.accuracy) });
+        setLocBusy(false);
+      },
+      (er) => {
+        setLocErr(er.code === 1 ? 'Location permission ivvaledu. Browser settings lo allow chesi malli try cheyyandi.' : 'Location dorakaledu. Phone GPS ON chesi malli try cheyyandi.');
+        setLocBusy(false);
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 },
+    );
+  };
+
   const placeOrder = async (e, kind, bookItem) => {
     e.preventDefault();
     setFormErr('');
@@ -224,12 +292,20 @@ export default function Storefront() {
         kind,
         name: form.name, phone: form.phone, address: form.address, note: form.note,
         fulfilment: kind === 'booking' ? 'pickup' : form.fulfilment,
+        ...(kind === 'order' && form.fulfilment === 'delivery' ? { lat: loc?.lat ?? null, lng: loc?.lng ?? null, landmark, saveAddress: saveAddr, addressLabel: addrLabel } : {}),
         preferredAt: form.preferredAt ? new Date(form.preferredAt).toISOString() : '',
         items: kind === 'booking' ? [{ itemId: bookItem.id, variantId: firstInStock(bookItem), qty: 1 }] : cartLines.map((l) => ({ itemId: l.item.id, variantId: l.variant?.id || null, qty: l.qty })),
       };
-      const r = await api(`/shop/${slug}/orders`, { method: 'POST', body });
+      const r = await api(`/shop/${slug}/orders`, { method: 'POST', body, headers: authHeaders() });
       addOrderToken(slug, r.token);
-      setMe({ name: form.name, phone: form.phone, address: form.address || me?.address || '' });
+      const delivered = form.fulfilment === 'delivery' && kind === 'order';
+      setMe({
+        ...(me || {}), name: form.name, phone: form.phone,
+        address: delivered ? form.address : me?.address || '',
+        landmark: delivered ? landmark : me?.landmark || '',
+        lat: delivered ? loc?.lat ?? null : me?.lat ?? null,
+        lng: delivered ? loc?.lng ?? null : me?.lng ?? null,
+      });
       if (kind === 'order') setCart({});
       navigate(`/o/${r.token}`);
     } catch (x) {
@@ -330,7 +406,7 @@ export default function Storefront() {
 
       {cartCount > 0 && (shop.allowPickup || shop.allowDelivery) && (
         <div className="fixed bottom-0 inset-x-0 p-3 z-30">
-          <button type="button" onClick={() => setSheet('cart')} className="max-w-xl mx-auto w-full h-14 rounded-2xl text-white font-bold flex items-center justify-between px-5 shadow-lg" style={{ background: color }}>
+          <button type="button" onClick={openCart} className="max-w-xl mx-auto w-full h-14 rounded-2xl text-white font-bold flex items-center justify-between px-5 shadow-lg" style={{ background: color }}>
             <span>{cartCount} item{cartCount > 1 ? 's' : ''} · {inr(itemsTotal)}</span>
             <span>View cart →</span>
           </button>
@@ -400,7 +476,46 @@ export default function Storefront() {
               </fieldset>
             )}
             {contactFields}
-            {form.fulfilment === 'delivery' && <div><label className="label" htmlFor="s-addr">Delivery address</label><textarea id="s-addr" required rows={2} className="input h-auto py-2.5" value={form.address} onChange={setF('address')} autoComplete="street-address" /></div>}
+            {form.fulfilment === 'delivery' && (
+              <fieldset className="flex flex-col gap-3 rounded-2xl border border-gray-200 p-3">
+                <legend className="label px-1">Delivery address</legend>
+                {addrs.length > 0 && (
+                  <div className="flex flex-col gap-2">
+                    {addrs.map((a) => (
+                      <div key={a.id} className="flex items-start gap-2 rounded-xl border-2 p-2.5" style={{ borderColor: addrSel === a.id ? color : '#E5E7EB' }}>
+                        <label className="flex-1 flex items-start gap-2 cursor-pointer text-sm">
+                          <input type="radio" name="addr" className="mt-1" checked={addrSel === a.id} onChange={() => pickAddr(a)} />
+                          <span><strong>{a.label}</strong>{a.lat ? ' · 📍' : ''}<span className="block text-gray-600">{a.address}{a.landmark ? ` · ${a.landmark}` : ''}</span></span>
+                        </label>
+                        <button type="button" aria-label={`Delete ${a.label} address`} className="w-9 h-9 rounded-lg text-gray-500 hover:bg-gray-100" onClick={() => removeAddr(a)}>×</button>
+                      </div>
+                    ))}
+                    <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer">
+                      <input type="radio" name="addr" checked={addrSel === 'new'} onChange={newAddr} /> + Kotha address
+                    </label>
+                  </div>
+                )}
+                {addrSel === 'new' && (
+                  <>
+                    <button type="button" onClick={useMyLocation} disabled={locBusy} className="h-12 rounded-xl border-2 font-bold text-sm flex items-center justify-center gap-2" style={{ borderColor: color, color }}>
+                      {locBusy ? 'Location teeskuntunnam…' : loc ? '📍 Location captured ✓ (malli teeskondi)' : '📍 Use my current location'}
+                    </button>
+                    {loc && <a className="text-xs font-semibold underline -mt-1" style={{ color }} href={`https://www.google.com/maps?q=${loc.lat},${loc.lng}`} target="_blank" rel="noreferrer">Map lo chudandi{loc.acc ? ` (~${loc.acc} m accuracy)` : ''}</a>}
+                    {locErr && <p className="text-xs font-semibold text-red-700">{locErr}</p>}
+                    <div><label className="label" htmlFor="s-addr">House / flat no., street, area</label><textarea id="s-addr" required rows={2} className="input h-auto py-2.5" value={form.address} onChange={setF('address')} autoComplete="street-address" /></div>
+                    <div><label className="label" htmlFor="s-land">Landmark (optional)</label><input id="s-land" className="input" value={landmark} onChange={(e) => setLandmark(e.target.value)} placeholder="e.g. Near Hanuman temple" /></div>
+                    {getShopToken() ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" className="w-5 h-5" checked={saveAddr} onChange={(e) => setSaveAddr(e.target.checked)} /> Save as</label>
+                        {['Home', 'Work', 'Other'].map((l) => (
+                          <button key={l} type="button" aria-pressed={addrLabel === l} onClick={() => setAddrLabel(l)} className="h-9 px-3 rounded-lg text-xs font-bold border" style={addrLabel === l ? { background: color, color: '#fff', borderColor: color } : { borderColor: '#D1D5DB' }}>{l}</button>
+                        ))}
+                      </div>
+                    ) : <p className="text-xs text-muted">Ee address ee phone lo gurthupettukuntam.</p>}
+                  </>
+                )}
+              </fieldset>
+            )}
             <div><label className="label" htmlFor="s-note">Note (optional)</label><input id="s-note" className="input" value={form.note} onChange={setF('note')} placeholder="Size, colour, timing…" /></div>
             <div className="text-sm flex flex-col gap-1 bg-gray-50 rounded-xl p-3">
               <div className="flex justify-between"><span>Items</span><span>{inr(itemsTotal)}</span></div>

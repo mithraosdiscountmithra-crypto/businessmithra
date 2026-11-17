@@ -394,6 +394,8 @@ model ShopOrder {
   address       String?
   note          String?
   fulfilment    String           @default("pickup") // pickup, delivery
+  lat           Float?
+  lng           Float?
   preferredAt   DateTime?
   status        String           @default("new") // new, confirmed, ready, completed, cancelled
   subtotal      Decimal          @default(0) @db.Decimal(12, 2)
@@ -438,4 +440,19 @@ model OtpCode {
   createdAt DateTime @default(now())
 
   @@index([phone, createdAt])
+}
+
+// Delivery addresses saved by OTP-verified customers (shared across BusinessMithra shops for that mobile).
+model SavedAddress {
+  id        String   @id @default(cuid())
+  phone     String
+  label     String   @default("Home") // Home, Work, Other
+  address   String
+  landmark  String?
+  lat       Float?
+  lng       Float?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([phone])
 }

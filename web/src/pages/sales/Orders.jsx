@@ -118,6 +118,17 @@ export default function Orders() {
                 </ul>
                 {o.preferredAt && <p className="text-sm"><strong>Time:</strong> {fmtDateTime(o.preferredAt)}</p>}
                 {o.address && <p className="text-sm"><strong>Address:</strong> {o.address}</p>}
+                {o.fulfilment === 'delivery' && (() => {
+                  const map = o.lat ? `https://www.google.com/maps/dir/?api=1&destination=${o.lat},${o.lng}` : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.address || '')}`;
+                  const pin = o.lat ? `https://www.google.com/maps?q=${o.lat},${o.lng}` : map;
+                  const text = `Delivery: ${o.number}\n${o.name} · ${o.phone}\n${o.address || ''}\n${lines}\nTotal: ${inr(o.total)} (${o.paymentStatus === 'paid' ? 'PAID' : 'Collect cash/UPI'})\n\n📍 ${pin}`;
+                  return (
+                    <div className="flex flex-wrap gap-2">
+                      <a className="btn-ghost h-10 px-4" href={map} target="_blank" rel="noreferrer">🗺️ Open in Maps{o.lat ? '' : ' (address)'}</a>
+                      <a className="btn-ghost h-10 px-4" href={`https://wa.me/?text=${encodeURIComponent(text)}`} target="_blank" rel="noreferrer">Send to delivery boy</a>
+                    </div>
+                  );
+                })()}
                 {o.note && <p className="text-sm"><strong>Note:</strong> {o.note}</p>}
                 <div className="flex flex-wrap gap-2">
                   {can.edit && nxt && <button type="button" className="btn-primary h-10 px-4" onClick={() => setStatus(o, nxt[0])}>{nxt[1]}</button>}

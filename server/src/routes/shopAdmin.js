@@ -12,7 +12,7 @@ const router = Router();
 router.use(requireAuth());
 
 const slugify = (s) => String(s).toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'shop';
-const RESERVED = new Set(['api', 'admin', 'login', 'signup', 'sales', 'accounts', 'settings', 'staff', 'shop', 'i', 's', 'o', 'm', 'www', 'app', 'help', 'otp', 'order', 'my-orders']);
+const RESERVED = new Set(['api', 'admin', 'login', 'signup', 'sales', 'accounts', 'settings', 'staff', 'shop', 'i', 's', 'o', 'm', 'www', 'app', 'help', 'otp', 'order', 'my-orders', 'me']);
 
 async function ensureSlug(b) {
   if (b.slug) return b.slug;

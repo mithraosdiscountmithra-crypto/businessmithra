@@ -62,6 +62,11 @@ const orderSchema = z.object({
   address: z.string().trim().max(400).optional().nullable().or(z.literal('')).transform((v) => v || null),
   note: z.string().trim().max(500).optional().nullable().or(z.literal('')).transform((v) => v || null),
   fulfilment: z.enum(['pickup', 'delivery']).default('pickup'),
+  lat: z.coerce.number().min(-90).max(90).optional().nullable(),
+  lng: z.coerce.number().min(-180).max(180).optional().nullable(),
+  landmark: z.string().trim().max(120).optional().nullable().or(z.literal('')).transform((v) => v || null),
+  saveAddress: z.boolean().optional(),
+  addressLabel: z.enum(['Home', 'Work', 'Other']).optional(),
   preferredAt: z.string().optional().nullable().or(z.literal('')).transform((v) => (v ? new Date(v) : null)),
   items: z.array(z.object({
     itemId: z.string().min(1),
@@ -114,6 +119,7 @@ router.post('/:slug/orders', writeLimiter, h(async (req, res) => {
   const deliveryFee = d.kind === 'order' && d.fulfilment === 'delivery' ? num(b.deliveryFee) : 0;
   const total = Math.round(itemsTotal + deliveryFee);
 
+  if (d.address && d.landmark) d.address = `${d.address} (Landmark: ${d.landmark})`;
   const customerId = await findOrCreateCustomer(b.id, d.name, d.phone, d.address);
   const order = await prisma.$transaction(async (tx) => {
     const bb = await tx.business.update({ where: { id: b.id }, data: { nextOrderNo: { increment: 1 } } });
@@ -125,6 +131,8 @@ router.post('/:slug/orders', writeLimiter, h(async (req, res) => {
         token: crypto.randomBytes(16).toString('hex'),
         customerId, name: d.name, phone: d.phone, address: d.address, note: d.note,
         fulfilment: d.kind === 'booking' ? 'pickup' : d.fulfilment,
+        lat: d.fulfilment === 'delivery' ? d.lat ?? null : null,
+        lng: d.fulfilment === 'delivery' ? d.lng ?? null : null,
         preferredAt: d.preferredAt,
         subtotal: c.subtotal, taxTotal: c.taxTotal, deliveryFee, total,
         items: { create: c.lines.map(({ sort, ...l }) => l) },
@@ -132,6 +140,16 @@ router.post('/:slug/orders', writeLimiter, h(async (req, res) => {
     });
   });
   await logActivity(b.id, null, 'online_order', 'shop_order', order.id);
+
+  // Save the delivery address for this verified mobile, for next time.
+  const verified = shopPhone(req);
+  if (d.kind === 'order' && d.fulfilment === 'delivery' && d.saveAddress && verified === d.phone) {
+    const plain = String(req.body.address || '').trim().slice(0, 400);
+    const same = await prisma.savedAddress.findFirst({ where: { phone: verified, address: plain } });
+    const data = { label: d.addressLabel || 'Home', address: plain, landmark: d.landmark, lat: d.lat ?? null, lng: d.lng ?? null };
+    if (same) await prisma.savedAddress.update({ where: { id: same.id }, data });
+    else if ((await prisma.savedAddress.count({ where: { phone: verified } })) < 10) await prisma.savedAddress.create({ data: { ...data, phone: verified } });
+  }
   res.status(201).json({ token: order.token, number: order.number });
 }));
 
@@ -181,6 +199,22 @@ router.post('/my-orders', h(async (req, res) => {
     orderBy: { createdAt: 'desc' },
   });
   res.json({ orders: orders.map(({ _count, ...o }) => ({ ...o, itemCount: _count.items })) });
+}));
+
+// Saved delivery addresses (OTP login required).
+const needPhone = (req) => {
+  const p = shopPhone(req);
+  if (!p) throw new HttpError(401, 'Please login with OTP');
+  return p;
+};
+router.get('/me/addresses', h(async (req, res) => {
+  const p = needPhone(req);
+  res.json({ addresses: await prisma.savedAddress.findMany({ where: { phone: p }, orderBy: { updatedAt: 'desc' } }) });
+}));
+router.delete('/me/addresses/:id', h(async (req, res) => {
+  const p = needPhone(req);
+  await prisma.savedAddress.deleteMany({ where: { id: req.params.id, phone: p } });
+  res.json({ ok: true });
 }));
 
 const enquirySchema = z.object({
