@@ -60,6 +60,8 @@ export default function InvoiceView() {
   const can = me.permissions.sales;
   const { data, error, setData } = useApi(`/invoices/${id}`);
   const [paying, setPaying] = useState(false);
+  const wa = useApi('/invoices/wa-config');
+  const [sent, setSent] = useState('');
   const [err, setErr] = useState('');
 
   if (error) return <ErrorBox>{error}</ErrorBox>;
@@ -94,6 +96,11 @@ export default function InvoiceView() {
         <div className="flex flex-wrap gap-2">
           {can.add && inv.status !== 'cancelled' && due > 0 && <button type="button" className="btn-primary" onClick={() => setPaying(true)}>Record payment</button>}
           <a className="btn bg-green-100 text-green-800 hover:bg-green-200" href={waLink(inv.customer.phone, msg)} target="_blank" rel="noreferrer">💬 WhatsApp text</a>
+          {wa.data?.autoSend && inv.customer.phone && (
+            <button type="button" className="btn bg-green-700 text-white hover:bg-green-800" onClick={() => { setErr(''); setSent('sending'); api(`/invoices/${inv.id}/send-whatsapp`, { method: 'POST', body: {} }).then(() => setSent('sent')).catch((x) => { setSent(''); setErr(x.message); }); }}>
+              {sent === 'sending' ? 'Sending…' : sent === 'sent' ? '✅ PDF sent' : `📤 Send PDF to ${inv.customer.phone}`}
+            </button>
+          )}
           <button type="button" className="btn bg-green-600 text-white hover:bg-green-700" onClick={() => shareBillPdf(inv, business, { message: `${business.name} – ${inv.number} – ${inr(inv.total)}` }).catch((x) => setErr(x.message))}>📄 Share PDF</button>
           <button type="button" className="btn-ghost" onClick={() => downloadBillPdf(inv, business).catch((x) => setErr(x.message))}>⬇️ PDF</button>
           <button type="button" className="btn-ghost" onClick={() => window.print()}>Print</button>

@@ -2,8 +2,35 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { h } from '../lib/route.js';
 import { HttpError } from '../middleware/auth.js';
+import { billFileName, makeBillPdf } from '../lib/billPdf.js';
 
 const router = Router();
+
+async function loadPublicInvoice(tokenParam) {
+  const token = String(tokenParam || '').replace(/\.pdf$/, '');
+  if (!/^[a-f0-9]{32}$/.test(token)) throw new HttpError(404, 'Invoice not found');
+  const inv = await prisma.invoice.findUnique({
+    where: { shareToken: token },
+    include: {
+      customer: { select: { name: true, phone: true, address: true, city: true, state: true, gstin: true } },
+      items: { orderBy: { sort: 'asc' } },
+      payments: { select: { amount: true, date: true, mode: true }, orderBy: { date: 'asc' } },
+      business: { select: { name: true, phone: true, email: true, gstin: true, address: true, city: true, state: true, invoiceTerms: true, bankDetails: true, status: true } },
+    },
+  });
+  if (!inv || inv.business.status === 'blocked') throw new HttpError(404, 'Invoice not found');
+  return inv;
+}
+
+// The bill as a PDF file (used by WhatsApp to deliver the document, and for downloads).
+router.get('/invoice/:token/pdf', h(async (req, res) => {
+  const inv = await loadPublicInvoice(req.params.token);
+  const bytes = await makeBillPdf(inv, inv.business);
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `inline; filename="${billFileName(inv, inv.business)}"`);
+  res.setHeader('Cache-Control', 'private, max-age=300');
+  res.send(Buffer.from(bytes));
+}));
 
 // Customer-facing invoice link (shared on WhatsApp). Token is random and unguessable.
 router.get('/invoice/:token', h(async (req, res) => {

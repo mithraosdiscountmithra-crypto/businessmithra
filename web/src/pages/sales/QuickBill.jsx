@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useAuth } from '../../auth.jsx';
@@ -54,6 +54,24 @@ export default function QuickBill() {
   const [done, setDone] = useState(null); // { invoice, waUrl, chatUrl }
   const [pdfBusy, setPdfBusy] = useState(false);
   const [pdfMsg, setPdfMsg] = useState('');
+  const [autoSend, setAutoSend] = useState(false);
+  const [sendState, setSendState] = useState(''); // '', 'sending', 'sent', 'failed'
+
+  useEffect(() => {
+    api('/invoices/wa-config').then((r) => setAutoSend(r.autoSend)).catch(() => {});
+  }, []);
+
+  const sendDirect = async (invoice) => {
+    setSendState('sending');
+    setPdfMsg('');
+    try {
+      await api(`/invoices/${invoice.id}/send-whatsapp`, { method: 'POST', body: { phone: phone.trim() } });
+      setSendState('sent');
+    } catch (x) {
+      setSendState('failed');
+      setPdfMsg(x.message);
+    }
+  };
 
   const t = useMemo(() => {
     const gross = lines.map((l) => r2((Number(l.qty) || 0) * (Number(l.amount) || 0)));
@@ -86,6 +104,7 @@ export default function QuickBill() {
       const waUrl = `https://wa.me/91${phone.trim()}?text=${encodeURIComponent(text)}`;
       const greet = `Namaste${name ? ` ${name} garu` : ''}, ${b.name} nunchi mee bill ${r.invoice.number} – ${inrExact(r.invoice.total)}. PDF pampistunnam 🙏`;
       setDone({ invoice: r.invoice, waUrl, chatUrl: `https://wa.me/91${phone.trim()}?text=${encodeURIComponent(greet)}` });
+      if (autoSend) sendDirect(r.invoice);
     } catch (x) {
       setErr(x.message);
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -110,6 +129,9 @@ export default function QuickBill() {
           <span className="w-14 h-14 rounded-full bg-green-600 text-white text-2xl flex items-center justify-center" aria-hidden="true">✓</span>
           <h1 className="text-xl font-extrabold">Bill {done.invoice.number} ready</h1>
           <p className="text-muted">{inrExact(done.invoice.total)} · +91 {phone}</p>
+          {sendState === 'sending' && <p className="font-semibold text-gray-700">📤 PDF WhatsApp ki pamputunnam…</p>}
+          {sendState === 'sent' && <p className="font-bold text-green-800">✅ PDF +91 {phone} WhatsApp ki pampamu</p>}
+          {sendState === 'failed' && <button type="button" className="btn-ghost h-10 mt-1" onClick={() => sendDirect(done.invoice)}>🔁 Malli try cheyyandi</button>}
         </div>
         <button
           type="button"
@@ -128,14 +150,14 @@ export default function QuickBill() {
             }
           }}
         >
-          {pdfBusy ? 'PDF tayaravutundi…' : '📄 Send PDF on WhatsApp'}
+          {pdfBusy ? 'PDF tayaravutundi…' : autoSend ? '📄 Share PDF (choose chat)' : '📄 Send PDF on WhatsApp'}
         </button>
         {pdfMsg && <p className="text-sm font-semibold text-amber-900 bg-amber-50 rounded-xl p-3">{pdfMsg}</p>}
-        <div className="text-left text-sm bg-gray-50 rounded-xl p-3 flex flex-col gap-1">
+        {!autoSend && <div className="text-left text-sm bg-gray-50 rounded-xl p-3 flex flex-col gap-1">
           <p className="font-bold">Customer number phone lo save lekapothe:</p>
           <p>1️⃣ <a href={done.chatUrl} className="font-bold text-green-800 underline">💬 Open chat</a> nokki "Namaste" message pampandi</p>
           <p>2️⃣ Malli ikkadiki vachi <strong>📄 Send PDF</strong> → WhatsApp → paina aa chat select cheyyandi</p>
-        </div>
+        </div>}
         <div className="flex gap-2">
           <button type="button" className="btn-ghost flex-1" onClick={() => downloadBillPdf(done.invoice, b)}>⬇️ Download PDF</button>
           <a href={done.waUrl} className="btn-ghost flex-1">💬 Send as text</a>
@@ -241,7 +263,7 @@ export default function QuickBill() {
           ))}
         </div>
         <button type="submit" disabled={busy || t.total <= 0} className="btn h-14 text-base bg-green-600 text-white hover:bg-green-700 disabled:opacity-50">
-          {busy ? 'Creating bill…' : `Create bill · ${inrExact(t.total)}`}
+          {busy ? 'Creating bill…' : autoSend ? `Send PDF on WhatsApp · ${inrExact(t.total)}` : `Create bill · ${inrExact(t.total)}`}
         </button>
         <p className="text-xs text-muted text-center">Bill automatic ga Invoices, Customers, Accounts lo save avutundi.</p>
       </section>

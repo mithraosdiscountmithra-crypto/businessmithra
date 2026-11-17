@@ -5,6 +5,8 @@ import { prisma, logActivity } from '../lib/prisma.js';
 import { h } from '../lib/route.js';
 import { computeDoc, dateOnly, docSchema, GST_RATES, invoiceStatus, istToday, num, parseRange, r2 } from '../lib/money.js';
 import { HttpError, requireAuth, requirePermission } from '../middleware/auth.js';
+import { autoSendEnabled, sendBillOnWhatsApp } from '../lib/whatsappBill.js';
+import { billFileName } from '../lib/billPdf.js';
 
 const router = Router();
 router.use(requireAuth());
@@ -128,6 +130,24 @@ router.post('/quick', requirePermission('sales', 'add'), h(async (req, res) => {
   await logActivity(req.businessId, req.user.id, 'quick_bill', 'invoice', inv.id);
   const full = await prisma.invoice.findUnique({ where: { id: inv.id }, include });
   res.status(201).json({ invoice: full });
+}));
+
+router.get('/wa-config', requirePermission('sales', 'view'), (_req, res) => res.json({ autoSend: autoSendEnabled() }));
+
+// Sends this invoice's PDF directly to the customer's WhatsApp (AiSensy).
+router.post('/:id/send-whatsapp', requirePermission('sales', 'add'), h(async (req, res) => {
+  const inv = await prisma.invoice.findFirst({ where: { id: req.params.id, businessId: req.businessId }, include: { customer: true, business: true } });
+  if (!inv) throw new HttpError(404, 'Invoice not found');
+  const phone = String(req.body?.phone || inv.customer.phone || '').replace(/\D/g, '').slice(-10);
+  if (!/^[6-9]\d{9}$/.test(phone)) throw new HttpError(400, 'Customer WhatsApp number is missing');
+  const base = `${req.protocol}://${req.get('host')}`;
+  const name = inv.customer.name.startsWith('Customer ') ? 'Customer' : inv.customer.name;
+  await sendBillOnWhatsApp({
+    phone, customerName: name, shopName: inv.business.name, number: inv.number, total: inv.total,
+    pdfUrl: `${base}/api/public/invoice/${inv.shareToken}/pdf`, fileName: billFileName(inv, inv.business),
+  });
+  await logActivity(req.businessId, req.user.id, 'whatsapp_pdf', 'invoice', inv.id);
+  res.json({ sent: true, to: phone });
 }));
 
 router.get('/:id', requirePermission('sales', 'view'), h(async (req, res) => {
