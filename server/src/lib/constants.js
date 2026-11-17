@@ -25,7 +25,7 @@ export const BUSINESS_TYPES = {
 
 export const ACTIONS = ['view', 'add', 'edit', 'delete'];
 
-export const TRIAL_DAYS = 30;
+export const TRIAL_DAYS = 7;
 
 const perm = (view, add, edit, del) => ({ canView: view, canAdd: add, canEdit: edit, canDelete: del });
 const all = (p) => Object.fromEntries(MODULES.map((m) => [m, p]));

@@ -10,11 +10,11 @@ All-in-one business software (CRM + ERP) for small businesses: Sales, Marketing,
 
 **Online Shop:** every business gets its own shop page (`/s/<shop-link>`) with logo, cover, categories, product photos, MRP/discount, cart, store pickup or home delivery, appointment booking for services, questions that become Leads, order status page with UPI pay link and WhatsApp send-to-shop, QR code for the counter. Vendor side: Online Orders with auto-refresh and sound, confirm/ready/complete, mark paid, one-click GST invoice. Photo upload uses Cloudinary (set `CLOUDINARY_*` env vars on Render); without it, image links can be pasted.
 
-**Plans & Super Admin:** Free / Basic / Pro plans (prices, users, modules editable by super admin), 30-day trial, vendor Plan & Billing page with offline payment requests (cash / UPI / bank), super admin at `/admin` (env login) with platform stats (MRR, signups, trial/paid/expired), businesses list and detail (extend trial, set plan, block, private notes), request approve/reject. Expired businesses can only open Plan & Billing; their shop closes; data is kept.
+**Plans & Super Admin:** Free / Basic / Pro plans (prices, users, modules editable by super admin), 7-day trial, vendor Plan & Billing page with offline payment requests (cash / UPI / bank), super admin at `/admin` (env login) with platform stats (MRR, signups, trial/paid/expired), businesses list and detail (extend trial, set plan, block, private notes), request approve/reject. Expired businesses can only open Plan & Billing; their shop closes; data is kept.
 
 ## Phase 1A
 
-- Business signup in 3 steps (details → business type → owner account), 30-day free trial
+- Business signup in 3 steps (details → business type → owner account), 7-day free trial
 - Login / logout (email + password, secure cookie)
 - Modules auto ON per business type; owner can switch them ON/OFF
 - Staff accounts and roles with per-module View / Add / Edit / Delete permissions

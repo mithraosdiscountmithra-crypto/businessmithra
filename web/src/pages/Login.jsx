@@ -15,7 +15,7 @@ export function AuthShell({ title, subtitle, children }) {
           <h2 className="text-4xl font-extrabold leading-tight">Mee motham business,<br />okka chota.</h2>
           <p className="text-navy-200 text-lg">Sales, Accounts, Stock, Staff, Marketing — anni reports tho.</p>
         </div>
-        <p className="hidden lg:block text-sm text-navy-200">30 days free trial · No card needed</p>
+        <p className="hidden lg:block text-sm text-navy-200">7 days free trial · No card needed</p>
       </div>
       <div className="flex-1 flex items-start lg:items-center justify-center p-6 lg:p-12">
         <div className="w-full max-w-md flex flex-col gap-6">

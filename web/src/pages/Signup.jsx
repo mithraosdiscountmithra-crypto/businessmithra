@@ -46,7 +46,7 @@ export default function Signup() {
   };
 
   return (
-    <AuthShell title="Create your business account" subtitle="30 days free · Anni features try cheyyandi">
+    <AuthShell title="Create your business account" subtitle="7 days free · Anni features try cheyyandi">
       <ol className="flex gap-2" aria-label="Signup steps">
         {STEPS.map((s, i) => (
           <li key={s} className="flex-1 flex flex-col gap-1.5">
