@@ -13,6 +13,12 @@ import POS from './pages/sales/POS.jsx';
 import ItemReport from './pages/sales/ItemReport.jsx';
 import CustomerStatement from './pages/sales/CustomerStatement.jsx';
 import GstReturns from './pages/accounts/GstReturns.jsx';
+import Campaigns from './pages/mk/Campaigns.jsx';
+import Coupons from './pages/mk/Coupons.jsx';
+import Wishes from './pages/mk/Wishes.jsx';
+import Employees from './pages/hr/Employees.jsx';
+import Attendance from './pages/hr/Attendance.jsx';
+import Salary from './pages/hr/Salary.jsx';
 import Labels from './pages/ops/Labels.jsx';
 import Settings from './pages/Settings.jsx';
 import Staff from './pages/Staff.jsx';
@@ -133,6 +139,14 @@ export default function App() {
       <Route path="/sales/reports/items" element={<Private module="sales"><ItemReport /></Private>} />
       <Route path="/sales/customers/:id/statement" element={<Private module="sales"><CustomerStatement /></Private>} />
       <Route path="/accounts/gst-returns" element={<Private module="accounts"><GstReturns /></Private>} />
+      <Route path="/mk" element={<Navigate to="/mk/campaigns" replace />} />
+      <Route path="/mk/campaigns" element={<Private module="marketing"><Campaigns /></Private>} />
+      <Route path="/mk/coupons" element={<Private module="marketing"><Coupons /></Private>} />
+      <Route path="/mk/wishes" element={<Private module="marketing"><Wishes /></Private>} />
+      <Route path="/hr" element={<Navigate to="/hr/attendance" replace />} />
+      <Route path="/hr/attendance" element={<Private module="hr"><Attendance /></Private>} />
+      <Route path="/hr/salary" element={<Private module="hr"><Salary /></Private>} />
+      <Route path="/hr/employees" element={<Private module="hr"><Employees /></Private>} />
       <Route path="/pos" element={<Private module="sales"><POS /></Private>} />
       <Route path="/ops/labels" element={<Private module="operations"><Labels /></Private>} />
       <Route path="/ops/suppliers" element={<Private module="operations"><Suppliers /></Private>} />

@@ -12,6 +12,7 @@ import { accessState, getPlans } from '../lib/plans.js';
 import { activeBenefits } from '../lib/membership.js';
 import { available } from '../lib/stock.js';
 import { sendTemplate } from '../lib/aisensy.js';
+import { checkCoupon } from '../lib/coupons.js';
 
 const router = Router();
 
@@ -47,11 +48,16 @@ router.get('/:slug', h(async (req, res) => {
     orderBy: [{ category: 'asc' }, { name: 'asc' }],
     take: 1000,
   });
+  const offers = await prisma.coupon.findMany({
+    where: { businessId: b.id, active: true, showInShop: true, OR: [{ validTill: null }, { validTill: { gte: new Date(Date.now() - 86400000) } }] },
+    orderBy: { createdAt: 'desc' }, take: 5,
+  });
   const memberPlans = b.membershipsEnabled
     ? await prisma.membershipPlan.findMany({ where: { businessId: b.id, active: true }, orderBy: { price: 'asc' } })
     : [];
   res.json({
     shop: publicBusiness(b),
+    offers: offers.filter((o) => !o.usageLimit || o.usedCount < o.usageLimit).map((o) => ({ code: o.code, label: o.type === 'flat' ? `₹${num(o.value)} OFF` : `${num(o.value)}% OFF`, minOrder: num(o.minOrder), description: o.description })),
     memberPlans: memberPlans.map((p) => ({ id: p.id, name: p.name, price: num(p.price), durationDays: p.durationDays, discountPct: num(p.discountPct), freeDelivery: p.freeDelivery, description: p.description })),
     items: items.map((it) => ({
       id: it.id, name: it.name, type: it.type, unit: it.unit, description: it.description, category: it.category,
@@ -67,6 +73,7 @@ router.get('/:slug', h(async (req, res) => {
 const phone = z.string().trim().regex(/^[6-9]\d{9}$/, 'Enter a valid 10-digit mobile number');
 const orderSchema = z.object({
   kind: z.enum(['order', 'booking', 'table']).default('order'),
+  couponCode: z.string().trim().max(30).optional().nullable(),
   guests: z.preprocess((v) => (v === null || v === '' || v === undefined ? null : Number(v)), z.number().int().min(1, 'How many people?').max(100).nullable()),
   name: z.string().trim().min(2, 'Enter your name').max(80),
   phone,
@@ -137,13 +144,24 @@ router.post('/:slug/orders', writeLimiter, h(async (req, res) => {
   const benefits = b.membershipsEnabled && verifiedPhone && verifiedPhone === d.phone ? await activeBenefits(b.id, d.phone) : null;
   const gross = lines.reduce((a, l) => a + l.qty * l.rate, 0);
   const memberDiscount = benefits?.discountPct ? r2((gross * benefits.discountPct) / 100) : 0;
-  const c = computeDoc({ items: lines, discount: memberDiscount, interState: false });
-  const itemsTotal = r2(c.subtotal - c.discount + c.taxTotal);
+  let c = computeDoc({ items: lines, discount: memberDiscount, interState: false });
+  let itemsTotal = r2(c.subtotal - c.discount + c.taxTotal);
   if (d.kind === 'order' && num(b.minOrder) > 0 && itemsTotal < num(b.minOrder)) throw new HttpError(400, `Minimum order is ₹${num(b.minOrder)}`);
+  // Coupon: discount the customer sees (with GST) → same cut before GST.
+  const cp = d.kind === 'order' && d.couponCode ? await checkCoupon(b.id, d.couponCode, d.phone, itemsTotal) : null;
+  if (cp) {
+    const base = c.subtotal - c.discount;
+    const ratio = base > 0 ? (base + c.taxTotal) / base : 1;
+    c = computeDoc({ items: lines, discount: r2(memberDiscount + cp.off / ratio), interState: false });
+    itemsTotal = r2(c.subtotal - c.discount + c.taxTotal);
+  }
   const deliveryFee = d.kind === 'order' && d.fulfilment === 'delivery' && !benefits?.freeDelivery ? num(b.deliveryFee) : 0;
-  const memberNote = benefits && (memberDiscount > 0 || (benefits.freeDelivery && d.fulfilment === 'delivery'))
-    ? `${benefits.planName} member${benefits.discountPct ? ` · ${benefits.discountPct}% off` : ''}${benefits.freeDelivery && d.fulfilment === 'delivery' ? ' · free delivery' : ''}`
-    : null;
+  const memberNote = [
+    benefits && (memberDiscount > 0 || (benefits.freeDelivery && d.fulfilment === 'delivery'))
+      ? `${benefits.planName} member${benefits.discountPct ? ` · ${benefits.discountPct}% off` : ''}${benefits.freeDelivery && d.fulfilment === 'delivery' ? ' · free delivery' : ''}`
+      : null,
+    cp ? `Coupon ${cp.code} (${cp.label})` : null,
+  ].filter(Boolean).join(' · ') || null;
   const total = Math.round(itemsTotal + deliveryFee);
 
   if (d.address && d.landmark) d.address = `${d.address} (Landmark: ${d.landmark})`;
@@ -162,12 +180,13 @@ router.post('/:slug/orders', writeLimiter, h(async (req, res) => {
         lat: d.fulfilment === 'delivery' ? d.lat ?? null : null,
         lng: d.fulfilment === 'delivery' ? d.lng ?? null : null,
         preferredAt: d.preferredAt,
-        subtotal: c.subtotal, discount: c.discount, memberNote, taxTotal: c.taxTotal, deliveryFee, total,
+        subtotal: c.subtotal, discount: c.discount, memberNote, couponCode: cp?.code || null, taxTotal: c.taxTotal, deliveryFee, total,
         items: { create: c.lines.map(({ sort, ...l }) => l) },
       },
     });
   });
   await logActivity(b.id, null, 'online_order', 'shop_order', order.id);
+  if (cp) await prisma.coupon.update({ where: { id: cp.coupon.id }, data: { usedCount: { increment: 1 } } });
   // WhatsApp alert to the shop owner (AiSensy template: {{1}} shop, {{2}} order no, {{3}} customer, {{4}} details).
   const what = d.kind === 'table' ? `Table for ${d.guests || ''}` : d.kind === 'booking' ? 'Booking' : `₹${num(total)} · ${d.fulfilment === 'delivery' ? 'Delivery' : 'Pickup'}`;
   sendTemplate({ campaignEnv: 'AISENSY_ORDER_CAMPAIGN', phone: b.orderAlertPhone || b.phone, userName: b.name, params: [b.name, order.number, `${d.name} (${d.phone})`, what] }).catch(() => {});
@@ -321,6 +340,16 @@ router.get('/order/:token', h(async (req, res) => {
     },
     shop: { ...publicBusiness(b), upiLink: upi, upiId: upi ? b.upiId : null },
   });
+}));
+
+// Customer types a coupon in the cart: show how much they save.
+router.post('/:slug/coupon', writeLimiter, h(async (req, res) => {
+  const b = await loadShop(req.params.slug);
+  const amount = Number(req.body?.amount) || 0;
+  const phone = /^[6-9]\d{9}$/.test(String(req.body?.phone || '')) ? String(req.body.phone) : null;
+  const cp = await checkCoupon(b.id, req.body?.code, phone, amount);
+  if (!cp) throw new HttpError(400, 'Enter a coupon code');
+  res.json({ code: cp.code, off: cp.off, label: cp.label });
 }));
 
 // Install-as-app manifest for a shop (customers get the shop's own icon on their home screen).

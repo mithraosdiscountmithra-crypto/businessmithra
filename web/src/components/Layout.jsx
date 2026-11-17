@@ -4,6 +4,7 @@ import { useAuth } from '../auth.jsx';
 import { MODULE_INFO, MODULE_ORDER } from '../constants.js';
 import Icon from './Icon.jsx';
 import { InstallButton } from '../lib/install.js';
+import { lang, setLang, t } from '../lib/i18n.js';
 
 const linkClass = ({ isActive }) =>
   `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition ${
@@ -32,17 +33,17 @@ function Sidebar({ onNavigate }) {
         </div>
       </div>
       <NavLink to="/" end className={linkClass} onClick={onNavigate}>
-        <Icon name="dashboard" /> Dashboard
+        <Icon name="dashboard" /> {t('Dashboard')}
       </NavLink>
       <InstallButton className="mx-1 my-1 text-left text-sm font-semibold rounded-lg px-3 py-2 bg-white/10 text-white hover:bg-white/20" label="📲 Install BusinessMithra app" />
       {me.modules.includes('sales') && me.permissions.sales?.add && (
         <NavLink to="/bill" className={linkClass} onClick={onNavigate}>
-          <Icon name="accounts" /> ⚡ Send Bill
+          <Icon name="accounts" /> {t('⚡ Send Bill')}
         </NavLink>
       )}
       {me.modules.includes('sales') && me.permissions.sales?.add && (
         <NavLink to="/pos" className={linkClass} onClick={onNavigate}>
-          <Icon name="sales" /> 🧾 POS Counter
+          <Icon name="sales" /> {t('🧾 POS Counter')}
         </NavLink>
       )}
       {visible.map((m) => (
@@ -52,27 +53,32 @@ function Sidebar({ onNavigate }) {
           className={() => linkClass({ isActive: pathname.startsWith(MODULE_INFO[m].base || `/m/${m}`) })}
           onClick={onNavigate}
         >
-          <Icon name={MODULE_INFO[m].icon} /> {MODULE_INFO[m].label}
+          <Icon name={MODULE_INFO[m].icon} /> {t(MODULE_INFO[m].label)}
         </NavLink>
       ))}
       {me.user.isOwner && (
         <>
-          <div className="mt-3 mb-1 px-3 text-xs font-bold uppercase tracking-wider text-navy-200/80">Admin</div>
+          <div className="mt-3 mb-1 px-3 text-xs font-bold uppercase tracking-wider text-navy-200/80">{t('Admin')}</div>
           <NavLink to="/shop" className={linkClass} onClick={onNavigate}>
-            <Icon name="shop" /> Online Shop
+            <Icon name="shop" /> {t('Online Shop')}
           </NavLink>
           <NavLink to="/memberships" className={linkClass} onClick={onNavigate}>
-            <Icon name="staff" /> ⭐ Memberships
+            <Icon name="staff" /> {t('⭐ Memberships')}
           </NavLink>
           <NavLink to="/staff" className={linkClass} onClick={onNavigate}>
-            <Icon name="staff" /> Staff & Roles
+            <Icon name="staff" /> {t('Staff & Roles')}
           </NavLink>
           <NavLink to="/settings" className={linkClass} onClick={onNavigate}>
-            <Icon name="settings" /> Settings
+            <Icon name="settings" /> {t('Settings')}
           </NavLink>
         </>
       )}
       <div className="mt-auto pt-4 flex flex-col gap-3">
+        <div className="flex rounded-xl bg-white/10 p-1 text-sm font-bold" role="group" aria-label="Language">
+          {[['en', 'English'], ['te', 'తెలుగు']].map(([k, l]) => (
+            <button key={k} type="button" aria-pressed={lang === k} onClick={() => lang !== k && setLang(k)} className={`flex-1 h-8 rounded-lg ${lang === k ? 'bg-white text-navy' : 'text-white'}`}>{l}</button>
+          ))}
+        </div>
         {sub && (
           <div className="rounded-2xl bg-navy-700 p-4 flex flex-col gap-1">
             <span className="text-sm font-bold text-white">{sub.planName}</span>

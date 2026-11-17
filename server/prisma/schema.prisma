@@ -53,6 +53,9 @@ model Business {
   shopMapUrl    String?
   nextOrderNo   Int            @default(1)
   nextCreditNo  Int            @default(1)
+  wishesEnabled Boolean        @default(false)
+  wishOffer     String?        // e.g. "10% off this week"
+  lastWishDay   String?        // YYYY-MM-DD (IST) when birthday wishes last ran
   orderAlertPhone String?      // WhatsApp number for new-order alerts (default: business phone)
   membershipsEnabled Boolean   @default(false)
   customDomain       String?   // (unique, checked in code) vendor's own domain, e.g. www.srisaitextiles.in
@@ -80,6 +83,9 @@ model Business {
   purchases       PurchaseBill[]
   creditNotes     CreditNote[]
   stockMoves      StockMove[]
+  coupons         Coupon[]
+  campaigns       Campaign[]
+  employees       Employee[]
 }
 
 model User {
@@ -433,6 +439,7 @@ model ShopOrder {
   status        String           @default("new") // new, confirmed, ready, completed, cancelled
   subtotal      Decimal          @default(0) @db.Decimal(12, 2)
   discount      Decimal          @default(0) @db.Decimal(12, 2)
+  couponCode  String?
   memberNote    String?
   taxTotal      Decimal          @default(0) @db.Decimal(12, 2)
   deliveryFee   Decimal          @default(0) @db.Decimal(12, 2)
@@ -694,4 +701,77 @@ model CreditNoteItem {
   taxRate      Decimal    @db.Decimal(5, 2)
   amount       Decimal    @db.Decimal(12, 2)
   taxAmount    Decimal    @db.Decimal(12, 2)
+}
+
+// ───────────── MARKETING ─────────────
+
+model Coupon {
+  id          String    @id @default(cuid())
+  businessId  String
+  business    Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  code        String    // stored upper-case; unique per business (checked in code)
+  type        String    @default("percent") // percent, flat
+  value       Decimal   @db.Decimal(10, 2)
+  minOrder    Decimal   @default(0) @db.Decimal(10, 2)
+  maxDiscount Decimal?  @db.Decimal(10, 2)
+  validFrom   DateTime?
+  validTill   DateTime?
+  usageLimit  Int?
+  usedCount   Int       @default(0)
+  oncePerCustomer Boolean @default(true)
+  showInShop  Boolean   @default(true)
+  active      Boolean   @default(true)
+  description String?
+  createdAt   DateTime  @default(now())
+
+  @@index([businessId, code])
+}
+
+model Campaign {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  title      String
+  message    String
+  segment    String   // all, recent, inactive, members, birthday_month, tag
+  segmentArg String?
+  audience   Int      @default(0)
+  sent       Int      @default(0)
+  failed     Int      @default(0)
+  mode       String   @default("manual") // auto (AiSensy), manual (one by one)
+  createdById String?
+  createdAt  DateTime @default(now())
+
+  @@index([businessId, createdAt])
+}
+
+// ───────────── HR ─────────────
+
+model Employee {
+  id         String       @id @default(cuid())
+  businessId String
+  business   Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name       String
+  phone      String?
+  role       String?
+  payType    String       @default("monthly") // monthly, daily
+  salary     Decimal      @default(0) @db.Decimal(10, 2) // per month or per day
+  joinedOn   DateTime?
+  active     Boolean      @default(true)
+  notes      String?
+  createdAt  DateTime     @default(now())
+  attendance Attendance[]
+
+  @@index([businessId, name])
+}
+
+model Attendance {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date       DateTime // business day (UTC midnight)
+  status     String   // present, absent, half, leave, holiday
+  note       String?
+
+  @@unique([employeeId, date])
 }

@@ -29,6 +29,8 @@ import stockRoutes from './routes/stockRoutes.js';
 import supplierRoutes from './routes/suppliers.js';
 import purchaseRoutes from './routes/purchases.js';
 import creditNoteRoutes from './routes/creditNotes.js';
+import marketingRoutes, { runBirthdayWishes } from './routes/marketing.js';
+import hrRoutes from './routes/hr.js';
 import { Prisma } from '@prisma/client';
 import { prisma } from './lib/prisma.js';
 import { shopForHost } from './lib/domains.js';
@@ -99,6 +101,8 @@ app.use('/api/stock', stockRoutes);
 app.use('/api/suppliers', supplierRoutes);
 app.use('/api/purchases', purchaseRoutes);
 app.use('/api/credit-notes', creditNoteRoutes);
+app.use('/api/marketing', marketingRoutes);
+app.use('/api/hr', hrRoutes);
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
 
 // ── Google / WhatsApp friendly pages ──
@@ -206,3 +210,8 @@ app.use((err, _req, res, _next) => {
 });
 
 app.listen(PORT, () => console.log(`BusinessMithra running on port ${PORT}`));
+
+// Daily jobs (birthday wishes). Checked every 30 minutes; each shop runs once per day.
+const daily = () => runBirthdayWishes().catch((e) => console.error('birthday wishes failed', e.message));
+setTimeout(daily, 60000);
+setInterval(daily, 30 * 60000);

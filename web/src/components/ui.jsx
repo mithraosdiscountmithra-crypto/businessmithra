@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { api } from '../api.js';
 import { RANGES } from '../lib/format.js';
 import Icon from './Icon.jsx';
+import { t } from '../lib/i18n.js';
 
 // Loads data from the API; reload() refetches.
 export function useApi(path, deps = []) {
@@ -32,7 +33,7 @@ export function PageHeader({ title, subtitle, children }) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-3 print:hidden">
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl lg:text-[28px] font-extrabold">{title}</h1>
+        <h1 className="text-2xl lg:text-[28px] font-extrabold">{t(title)}</h1>
         {subtitle && <p className="text-sm text-muted">{subtitle}</p>}
       </div>
       {children && <div className="flex flex-wrap gap-2.5">{children}</div>}
@@ -52,7 +53,7 @@ export function SubNav({ items }) {
             `whitespace-nowrap px-3.5 py-3 -mb-px text-sm border-b-[3px] ${isActive ? 'border-brand text-brand font-bold' : 'border-transparent text-gray-600 font-medium hover:text-ink'}`
           }
         >
-          {it.label}
+          {t(it.label)}
         </NavLink>
       ))}
     </nav>
@@ -86,6 +87,18 @@ export const OPS_NAV = [
   { to: '/ops/labels', label: 'Barcode Labels' },
 ];
 
+export const MK_NAV = [
+  { to: '/mk/campaigns', label: 'Campaigns' },
+  { to: '/mk/coupons', label: 'Coupons' },
+  { to: '/mk/wishes', label: 'Birthday Wishes' },
+];
+
+export const HR_NAV = [
+  { to: '/hr/attendance', label: 'Attendance' },
+  { to: '/hr/salary', label: 'Salary' },
+  { to: '/hr/employees', label: 'Employees' },
+];
+
 export function Modal({ title, onClose, children, wide = false }) {
   useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && onClose();
@@ -115,7 +128,7 @@ export function Modal({ title, onClose, children, wide = false }) {
 export function Field({ label, id, children, hint, className = '' }) {
   return (
     <div className={className}>
-      <label className="label" htmlFor={id}>{label}</label>
+      <label className="label" htmlFor={id}>{t(label)}</label>
       {children}
       {hint && <p className="text-xs text-muted mt-1">{hint}</p>}
     </div>
@@ -188,7 +201,7 @@ export function RangePicker({ value, onChange }) {
 export function Stat({ label, value, sub, tone = '' }) {
   return (
     <div className="card p-4 flex flex-col gap-1">
-      <span className="text-xs font-semibold text-muted">{label}</span>
+      <span className="text-xs font-semibold text-muted">{t(label)}</span>
       <span className={`text-xl font-extrabold ${tone}`}>{value}</span>
       {sub && <span className="text-xs text-muted">{sub}</span>}
     </div>

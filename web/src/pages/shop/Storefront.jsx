@@ -195,6 +195,21 @@ export default function Storefront() {
   const memberOk = Boolean(benefits && getShopToken() && me?.phone === form.phone.trim());
   const fee = form.fulfilment === 'delivery' && !(memberOk && benefits.freeDelivery) ? shop?.deliveryFee || 0 : 0;
   const memberDisc = memberOk && benefits.discountPct ? Math.round(itemsTotal * benefits.discountPct) / 100 : 0;
+  const [couponIn, setCouponIn] = useState('');
+  const [coupon, setCoupon] = useState(null);
+  const [couponErr, setCouponErr] = useState('');
+  const couponOff = coupon ? Math.min(coupon.off, itemsTotal - memberDisc) : 0;
+  const applyCoupon = async (code = couponIn) => {
+    setCouponErr('');
+    try {
+      const r = await api(`/shop/${slug}/coupon`, { method: 'POST', body: { code, amount: itemsTotal - memberDisc, phone: form.phone } });
+      setCoupon(r);
+      setCouponIn(r.code);
+    } catch (x) {
+      setCoupon(null);
+      setCouponErr(x.message);
+    }
+  };
 
   const add = (id) => setCart((c) => ({ ...c, [id]: (c[id] || 0) + 1 }));
   const dec = (id) => setCart((c) => ({ ...c, [id]: Math.max(0, (c[id] || 0) - 1) }));
@@ -326,6 +341,7 @@ export default function Storefront() {
         kind,
         name: form.name, phone: form.phone, address: form.address, note: form.note,
         fulfilment: kind === 'order' ? form.fulfilment : 'pickup',
+        couponCode: kind === 'order' && coupon ? coupon.code : null,
         guests: kind === 'table' ? Number(form.guests) : null,
         ...(kind === 'order' && form.fulfilment === 'delivery' ? { lat: loc?.lat ?? null, lng: loc?.lng ?? null, landmark, saveAddress: saveAddr, addressLabel: addrLabel } : {}),
         preferredAt: form.preferredAt ? new Date(form.preferredAt).toISOString() : '',
@@ -341,7 +357,7 @@ export default function Storefront() {
         lat: delivered ? loc?.lat ?? null : me?.lat ?? null,
         lng: delivered ? loc?.lng ?? null : me?.lng ?? null,
       });
-      if (kind === 'order') setCart({});
+      if (kind === 'order') { setCart({}); setCoupon(null); setCouponIn(''); }
       navigate(`/o/${r.token}`);
     } catch (x) {
       setFormErr(x.message);
@@ -446,6 +462,16 @@ export default function Storefront() {
           <InstallButton className="h-10 px-4 rounded-xl bg-white border border-gray-300 font-bold" label="📲 Add to home screen" />
           {(me || getOrderTokens(slug).length > 0) && <button type="button" onClick={openMyOrders} className="h-10 px-4 rounded-xl bg-white border border-gray-300 font-bold">My Orders</button>}
         </div>
+        {data.offers?.length > 0 && (
+          <div className="max-w-5xl mx-auto px-4 pt-3 flex gap-2 overflow-x-auto">
+            {data.offers.map((o) => (
+              <button key={o.code} type="button" onClick={() => { setCouponIn(o.code); setCoupon(null); setCouponErr(''); }} className="shrink-0 text-left rounded-xl border-2 border-dashed px-3 py-2 bg-white" style={{ borderColor: color }}>
+                <span className="block text-sm font-extrabold" style={{ color }}>🏷️ {o.label}</span>
+                <span className="block text-xs text-gray-600">Code <b>{o.code}</b>{o.minOrder ? ` · min ${inr(o.minOrder)}` : ''}{o.description ? ` · ${o.description}` : ''}</span>
+              </button>
+            ))}
+          </div>
+        )}
         {me && (
           <p className="max-w-5xl mx-auto px-4 pt-2 text-xs text-gray-600">
             Namaste <strong>{me.name}</strong> ({me.phone}) ·{' '}
@@ -611,12 +637,22 @@ export default function Storefront() {
               </fieldset>
             )}
             <div><label className="label" htmlFor="s-note">Note (optional)</label><input id="s-note" className="input" value={form.note} onChange={setF('note')} placeholder="Size, colour, timing…" /></div>
+            <div className="flex flex-col gap-1">
+              <label className="label" htmlFor="s-cpn">Coupon code</label>
+              <div className="flex gap-2">
+                <input id="s-cpn" className="input uppercase" value={couponIn} onChange={(e) => { setCouponIn(e.target.value.toUpperCase()); setCoupon(null); }} placeholder="e.g. FIRST10" />
+                <button type="button" className="h-12 px-4 rounded-xl font-bold border-2 shrink-0" style={{ borderColor: color, color }} disabled={!couponIn.trim()} onClick={() => applyCoupon()}>Apply</button>
+              </div>
+              {coupon && <p className="text-xs font-semibold text-green-800">🎉 {coupon.code} applied – {coupon.label}</p>}
+              {couponErr && <p className="text-xs font-semibold text-red-700">{couponErr}</p>}
+            </div>
             <div className="text-sm flex flex-col gap-1 bg-gray-50 rounded-xl p-3">
               <div className="flex justify-between"><span>Items</span><span>{inr(itemsTotal)}</span></div>
+              {couponOff > 0 && <div className="flex justify-between text-green-800 font-semibold"><span>🏷️ Coupon {coupon.code}</span><span>− {inr(couponOff)}</span></div>}
               {memberDisc > 0 && <div className="flex justify-between text-green-800 font-semibold"><span>⭐ {benefits.planName} ({benefits.discountPct}% off)</span><span>− {inr(memberDisc)}</span></div>}
               {fee > 0 && <div className="flex justify-between"><span>Delivery</span><span>{inr(fee)}</span></div>}
               {memberOk && benefits.freeDelivery && form.fulfilment === 'delivery' && <div className="flex justify-between text-green-800 font-semibold"><span>⭐ Delivery</span><span>FREE</span></div>}
-              <div className="flex justify-between text-base font-extrabold pt-1"><span>Total</span><span>{inr(Math.round(itemsTotal - memberDisc + fee))}</span></div>
+              <div className="flex justify-between text-base font-extrabold pt-1"><span>Total</span><span>{inr(Math.round(itemsTotal - memberDisc - couponOff + fee))}</span></div>
             </div>
             {shop.minOrder > 0 && itemsTotal < shop.minOrder && <p className="text-sm font-semibold text-orange-800">Minimum order {inr(shop.minOrder)}. Inka {inr(shop.minOrder - itemsTotal)} add cheyyandi.</p>}
             {formErr && <p className="error-box" role="alert">{formErr}</p>}
