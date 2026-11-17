@@ -2,7 +2,13 @@
 
 All-in-one business software (CRM + ERP) for small businesses: Sales, Marketing, Accounts, Operations, HR, R&D and Management, with reports. Separate product — no connection to DiscountMithra.
 
-## Phase 1A (this code)
+## Built so far
+
+**Phase 1B–1D · Sales & Customers:** leads pipeline (New → Contacted → Quotation → Won/Lost, won leads become customers), customers with purchase history and dues, follow-up reminders, items & services with HSN and GST, quotations (convert to invoice in one click), GST invoices (CGST/SGST or IGST, discount, round-off, amount in words, print/PDF, WhatsApp share with a public customer link), payments and partial payments, sales reports (daily sales, top customers, staff-wise, dues aging, lead conversion), live dashboard numbers.
+
+**Phase 2 · Accounts:** cash/bank/UPI accounts with opening balances and live balances, expenses with categories and input GST, day book with running balance, Profit & Loss, GST summary by rate (GSTR-1/3B ready data), cash flow by payment mode.
+
+## Phase 1A
 
 - Business signup in 3 steps (details → business type → owner account), 30-day free trial
 - Login / logout (email + password, secure cookie)
@@ -47,6 +53,6 @@ cd ../web && npm install && npm run dev   # http://localhost:5173
 
 Middleware for later phases: `requireModule('sales')`, `requirePermission('sales', 'add')`.
 
-## Next: Phase 1B
+## Next: Phase 3 – Operations
 
-Customers & Leads (customers list/profile, leads pipeline, follow-up reminders).
+Stock / inventory linked to items and invoices, suppliers, purchase orders, tasks.

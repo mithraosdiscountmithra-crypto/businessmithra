@@ -20,6 +20,10 @@ const businessSchema = z.object({
   address: opt(300),
   city: opt(80),
   state: opt(80),
+  invoicePrefix: z.string().trim().min(1).max(12).regex(/^[A-Za-z0-9\-\/]+$/, 'Prefix can have letters, numbers, - and /').optional(),
+  quotePrefix: z.string().trim().min(1).max(12).regex(/^[A-Za-z0-9\-\/]+$/, 'Prefix can have letters, numbers, - and /').optional(),
+  invoiceTerms: opt(1000),
+  bankDetails: opt(500),
 });
 
 router.get('/business', async (req, res, next) => {

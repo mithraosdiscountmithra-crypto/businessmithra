@@ -18,6 +18,7 @@ export function mePayload(user) {
     business: {
       id: b.id, name: b.name, type: b.type, phone: b.phone, email: b.email, gstin: b.gstin,
       address: b.address, city: b.city, state: b.state, plan: b.plan, status: b.status,
+      invoicePrefix: b.invoicePrefix, quotePrefix: b.quotePrefix, invoiceTerms: b.invoiceTerms, bankDetails: b.bankDetails,
       trialDaysLeft: trialDaysLeft(b),
     },
     modules: MODULES.filter((m) => isModuleEnabled(user, m)),

@@ -17,6 +17,8 @@ export default function Settings() {
         setB({
           name: business.name || '', phone: business.phone || '', email: business.email || '',
           gstin: business.gstin || '', address: business.address || '', city: business.city || '', state: business.state || '',
+          invoicePrefix: business.invoicePrefix || 'INV-', quotePrefix: business.quotePrefix || 'QT-',
+          invoiceTerms: business.invoiceTerms || '', bankDetails: business.bankDetails || '',
         });
         setMods(modules);
       } catch (e) {
@@ -77,6 +79,26 @@ export default function Settings() {
           <div className="sm:col-span-2">
             <label className="label" htmlFor="f-address">Address</label>
             <textarea id="f-address" rows={2} className="input h-auto py-2.5" value={b.address} onChange={set('address')} />
+          </div>
+        </div>
+        <h2 className="text-lg font-bold pt-2">Invoice settings</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="label" htmlFor="f-ip">Invoice number prefix</label>
+            <input id="f-ip" className="input" value={b.invoicePrefix} onChange={set('invoicePrefix')} />
+            <p className="text-xs text-muted mt-1">e.g. INV- → INV-1, INV-2…</p>
+          </div>
+          <div>
+            <label className="label" htmlFor="f-qp">Quotation number prefix</label>
+            <input id="f-qp" className="input" value={b.quotePrefix} onChange={set('quotePrefix')} />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="label" htmlFor="f-bank">Bank / UPI details (invoice lo print avutundi)</label>
+            <textarea id="f-bank" rows={2} className="input h-auto py-2.5" value={b.bankDetails} onChange={set('bankDetails')} placeholder="SBI A/c 1234… IFSC SBIN000… · UPI: shop@upi" />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="label" htmlFor="f-terms">Terms & conditions</label>
+            <textarea id="f-terms" rows={2} className="input h-auto py-2.5" value={b.invoiceTerms} onChange={set('invoiceTerms')} placeholder="Goods once sold will not be taken back." />
           </div>
         </div>
         <div className="flex items-center gap-3">

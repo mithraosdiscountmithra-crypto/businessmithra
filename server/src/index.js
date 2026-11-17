@@ -10,6 +10,17 @@ import authRoutes from './routes/auth.js';
 import settingsRoutes from './routes/settings.js';
 import staffRoutes from './routes/staff.js';
 import roleRoutes from './routes/roles.js';
+import customerRoutes from './routes/customers.js';
+import leadRoutes from './routes/leads.js';
+import followUpRoutes from './routes/followups.js';
+import itemRoutes from './routes/items.js';
+import quotationRoutes from './routes/quotations.js';
+import invoiceRoutes from './routes/invoices.js';
+import publicRoutes from './routes/public.js';
+import dashboardRoutes from './routes/dashboard.js';
+import salesReportRoutes from './routes/salesReports.js';
+import accountsRoutes from './routes/accounts.js';
+import { Prisma } from '@prisma/client';
 
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
   console.error('JWT_SECRET is missing or shorter than 32 characters. Set it in Render > Environment.');
@@ -36,6 +47,11 @@ app.use(
   })
 );
 app.use(express.json({ limit: '1mb' }));
+// Money columns come from the database as Decimal objects; send them to the web app as plain numbers.
+app.set('json replacer', function replacer(key, value) {
+  const raw = this[key];
+  return raw && Prisma.Decimal.isDecimal(raw) ? Number(raw) : value;
+});
 app.use(cookieParser());
 
 const authLimiter = rateLimit({
@@ -53,6 +69,16 @@ app.use('/api/auth', authRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/staff', staffRoutes);
 app.use('/api/roles', roleRoutes);
+app.use('/api/customers', customerRoutes);
+app.use('/api/leads', leadRoutes);
+app.use('/api/followups', followUpRoutes);
+app.use('/api/items', itemRoutes);
+app.use('/api/quotations', quotationRoutes);
+app.use('/api/invoices', invoiceRoutes);
+app.use('/api/public', publicRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/reports/sales', salesReportRoutes);
+app.use('/api/finance', accountsRoutes);
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
 
 // The same server also serves the built web app (one Render service, one URL).

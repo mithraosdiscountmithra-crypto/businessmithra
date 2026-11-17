@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
 import { MODULE_INFO, MODULE_ORDER } from '../constants.js';
 import Icon from './Icon.jsx';
@@ -12,6 +12,7 @@ const linkClass = ({ isActive }) =>
 function Sidebar({ onNavigate }) {
   const { me, logout } = useAuth();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const visible = MODULE_ORDER.filter((m) => me.modules.includes(m) && me.permissions[m]?.view);
   const days = me.business.trialDaysLeft;
 
@@ -33,7 +34,12 @@ function Sidebar({ onNavigate }) {
         <Icon name="dashboard" /> Dashboard
       </NavLink>
       {visible.map((m) => (
-        <NavLink key={m} to={`/m/${m}`} className={linkClass} onClick={onNavigate}>
+        <NavLink
+          key={m}
+          to={MODULE_INFO[m].path || `/m/${m}`}
+          className={() => linkClass({ isActive: pathname.startsWith(MODULE_INFO[m].base || `/m/${m}`) })}
+          onClick={onNavigate}
+        >
           <Icon name={MODULE_INFO[m].icon} /> {MODULE_INFO[m].label}
         </NavLink>
       ))}
@@ -70,7 +76,7 @@ export default function Layout({ children }) {
 
   return (
     <div className="min-h-screen lg:flex">
-      <aside className="hidden lg:block w-64 shrink-0 sticky top-0 h-screen">
+      <aside className="hidden lg:block print:!hidden w-64 shrink-0 sticky top-0 h-screen">
         <Sidebar />
       </aside>
 
@@ -84,13 +90,13 @@ export default function Layout({ children }) {
       )}
 
       <div className="flex-1 min-w-0 flex flex-col">
-        <header className="lg:hidden sticky top-0 z-30 bg-navy text-white flex items-center gap-3 px-4 h-14">
+        <header className="lg:hidden print:hidden sticky top-0 z-30 bg-navy text-white flex items-center gap-3 px-4 h-14">
           <button type="button" aria-label="Open menu" onClick={() => setOpen(true)} className="w-11 h-11 -ml-2 flex items-center justify-center rounded-xl">
             <Icon name="menu" size={22} />
           </button>
           <span className="font-extrabold">BusinessMithra</span>
         </header>
-        <header className="hidden lg:flex items-center justify-end gap-3 px-8 pt-6">
+        <header className="hidden lg:flex print:!hidden items-center justify-end gap-3 px-8 pt-6">
           <div className="flex items-center gap-3">
             <span className="w-10 h-10 rounded-full bg-orange-100 text-orange-800 font-extrabold flex items-center justify-center">
               {me.user.name.slice(0, 2).toUpperCase()}
@@ -101,9 +107,9 @@ export default function Layout({ children }) {
             </div>
           </div>
         </header>
-        <main className="flex-1 px-4 py-6 lg:px-8 lg:py-6 max-w-6xl w-full">
+        <main className="flex-1 px-4 py-6 lg:px-8 lg:py-6 max-w-6xl w-full print:p-0 print:max-w-none">
           {expired && (
-            <div className="error-box mb-5">
+            <div className="error-box mb-5 print:hidden">
               Your 30-day free trial has ended. Plans and payments are coming soon — please contact BusinessMithra to continue.
             </div>
           )}
