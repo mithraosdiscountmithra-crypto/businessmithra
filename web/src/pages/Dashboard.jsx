@@ -56,6 +56,7 @@ export default function Dashboard() {
         </div>
         {me.permissions.sales?.add && me.modules.includes('sales') && (
           <div className="flex gap-2">
+            <Link to="/bill" className="btn bg-green-600 text-white hover:bg-green-700">⚡ Send Bill</Link>
             <Link to="/sales/invoices/new" className="btn-primary"><Icon name="plus" size={18} /> New Invoice</Link>
             {me.permissions.accounts?.add && me.modules.includes('accounts') && <Link to="/accounts/expenses?new=1" className="btn-ghost">Add Expense</Link>}
           </div>

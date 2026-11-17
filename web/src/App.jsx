@@ -27,6 +27,7 @@ import OrderStatus from './pages/shop/OrderStatus.jsx';
 import Orders from './pages/sales/Orders.jsx';
 import ShopSettings from './pages/ShopSettings.jsx';
 import Billing from './pages/Billing.jsx';
+import QuickBill from './pages/sales/QuickBill.jsx';
 import AdminApp from './pages/admin/AdminApp.jsx';
 
 function Splash() {
@@ -85,6 +86,7 @@ export default function App() {
       <Route path="/o/:token" element={<OrderStatus />} />
       <Route path="/shop" element={<Private ownerOnly><ShopSettings /></Private>} />
       <Route path="/sales/orders" element={<Private module="sales"><Orders /></Private>} />
+      <Route path="/bill" element={<Private module="sales"><QuickBill /></Private>} />
       <Route path="/" element={<Private><Dashboard /></Private>} />
       <Route path="/sales" element={<Navigate to="/sales/leads" replace />} />
       <Route path="/sales/leads" element={<Private module="sales"><Leads /></Private>} />

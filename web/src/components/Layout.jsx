@@ -33,6 +33,11 @@ function Sidebar({ onNavigate }) {
       <NavLink to="/" end className={linkClass} onClick={onNavigate}>
         <Icon name="dashboard" /> Dashboard
       </NavLink>
+      {me.modules.includes('sales') && me.permissions.sales?.add && (
+        <NavLink to="/bill" className={linkClass} onClick={onNavigate}>
+          <Icon name="accounts" /> ⚡ Send Bill
+        </NavLink>
+      )}
       {visible.map((m) => (
         <NavLink
           key={m}

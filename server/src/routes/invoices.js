@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import { z } from 'zod';
 import { prisma, logActivity } from '../lib/prisma.js';
 import { h } from '../lib/route.js';
-import { computeDoc, dateOnly, docSchema, invoiceStatus, istToday, num, parseRange, r2 } from '../lib/money.js';
+import { computeDoc, dateOnly, docSchema, GST_RATES, invoiceStatus, istToday, num, parseRange, r2 } from '../lib/money.js';
 import { HttpError, requireAuth, requirePermission } from '../middleware/auth.js';
 
 const router = Router();
@@ -80,6 +80,54 @@ router.get('/', requirePermission('sales', 'view'), h(async (req, res) => {
     take: Math.min(Number(req.query.limit) || 300, 1000),
   });
   res.json({ invoices });
+}));
+
+// ⚡ Quick bill: name + amount lines, optional GST % and discount %, sent on WhatsApp.
+const quickSchema = z.object({
+  phone: z.string().trim().regex(/^[6-9]\d{9}$/, 'Enter a valid 10-digit WhatsApp number'),
+  customerName: z.string().trim().max(80).optional().nullable().or(z.literal('')).transform((v) => v || null),
+  lines: z.array(z.object({
+    name: z.string().trim().min(1, 'Enter service / item name').max(200),
+    qty: z.coerce.number().positive('Quantity must be more than 0').default(1),
+    amount: z.coerce.number().positive('Enter amount'),
+  })).min(1, 'Add at least one service / item').max(50),
+  gstRate: z.coerce.number().refine((v) => GST_RATES.includes(v), 'Choose a valid GST %').default(0),
+  discountPct: z.coerce.number().min(0).max(100, 'Discount cannot be more than 100%').default(0),
+  paidMode: z.enum([...MODES, '']).optional().nullable(),
+});
+
+router.post('/quick', requirePermission('sales', 'add'), h(async (req, res) => {
+  const d = quickSchema.parse(req.body);
+  let customer = await prisma.customer.findFirst({ where: { businessId: req.businessId, phone: d.phone } });
+  if (!customer) {
+    customer = await prisma.customer.create({ data: { businessId: req.businessId, name: d.customerName || `Customer ${d.phone.slice(-4)}`, phone: d.phone } });
+  } else if (d.customerName && customer.name.startsWith('Customer ')) {
+    customer = await prisma.customer.update({ where: { id: customer.id }, data: { name: d.customerName } });
+  }
+  const items = d.lines.map((l) => ({ name: l.name, qty: l.qty, rate: r2(l.amount), taxRate: d.gstRate }));
+  const gross = items.reduce((a, l) => a + l.qty * l.rate, 0);
+  const c = computeDoc({ items, discount: r2((gross * d.discountPct) / 100), interState: false });
+  const today = istToday();
+  const inv = await prisma.$transaction(async (tx) => {
+    const b = await tx.business.update({ where: { id: req.businessId }, data: { nextInvoiceNo: { increment: 1 } } });
+    const created = await tx.invoice.create({
+      data: {
+        businessId: req.businessId, number: `${b.invoicePrefix}${b.nextInvoiceNo - 1}`, customerId: customer.id, date: dateOnly(today),
+        interState: false, subtotal: c.subtotal, discount: c.discount, taxTotal: c.taxTotal, cgst: c.cgst, sgst: c.sgst, igst: c.igst,
+        roundOff: c.roundOff, total: c.total, notes: d.discountPct ? `Discount ${d.discountPct}%` : null,
+        shareToken: crypto.randomBytes(16).toString('hex'), createdById: req.user.id, items: { create: c.lines },
+      },
+    });
+    if (d.paidMode) {
+      const accountId = await defaultAccountId(tx, req.businessId, d.paidMode);
+      await tx.payment.create({ data: { businessId: req.businessId, invoiceId: created.id, customerId: customer.id, accountId, amount: c.total, date: dateOnly(today), mode: d.paidMode, createdById: req.user.id } });
+      await recalcInvoice(tx, created.id);
+    }
+    return created;
+  });
+  await logActivity(req.businessId, req.user.id, 'quick_bill', 'invoice', inv.id);
+  const full = await prisma.invoice.findUnique({ where: { id: inv.id }, include });
+  res.status(201).json({ invoice: full });
 }));
 
 router.get('/:id', requirePermission('sales', 'view'), h(async (req, res) => {
