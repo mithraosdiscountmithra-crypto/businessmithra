@@ -12,6 +12,8 @@ export default function ShopSettings() {
   const [ok, setOk] = useState('');
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [locBusy, setLocBusy] = useState(false);
+  const [locMsg, setLocMsg] = useState('');
 
   useEffect(() => {
     api('/shop-admin/settings').then((r) => setF(r.settings)).catch((e) => setErr(e.message));
@@ -27,7 +29,7 @@ export default function ShopSettings() {
     setOk('');
     setBusy(true);
     try {
-      const r = await api('/shop-admin/settings', { method: 'PUT', body: { ...f, deliveryFee: Number(f.deliveryFee) || 0, minOrder: Number(f.minOrder) || 0 } });
+      const r = await api('/shop-admin/settings', { method: 'PUT', body: { ...f, deliveryFee: Number(f.deliveryFee) || 0, minOrder: Number(f.minOrder) || 0, shopMapUrl: f.shopMapUrl || '' } });
       setF(r.settings);
       setOk('Saved');
     } catch (x) {
@@ -36,6 +38,24 @@ export default function ShopSettings() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const captureLocation = () => {
+    setLocMsg('');
+    if (!navigator.geolocation) return setLocMsg('Ee phone/browser location support cheyyatledu. Google Maps link paste cheyyandi.');
+    setLocBusy(true);
+    navigator.geolocation.getCurrentPosition(
+      (p) => {
+        setF((x) => ({ ...x, shopLat: Number(p.coords.latitude.toFixed(6)), shopLng: Number(p.coords.longitude.toFixed(6)) }));
+        setLocMsg(`Location captured ✓ (~${Math.round(p.coords.accuracy)} m). "Save" click cheyyandi.`);
+        setLocBusy(false);
+      },
+      (er) => {
+        setLocMsg(er.code === 1 ? 'Location permission ivvaledu. Browser lo allow chesi malli try cheyyandi.' : 'Location dorakaledu. GPS ON chesi malli try cheyyandi.');
+        setLocBusy(false);
+      },
+      { enableHighAccuracy: true, timeout: 15000 },
+    );
   };
 
   const copy = async () => {
@@ -101,11 +121,29 @@ export default function ShopSettings() {
       </section>
 
       <section className="card p-5 flex flex-col gap-4">
-        <h2 className="text-lg font-bold">Orders & payments</h2>
+        <div>
+          <h2 className="text-lg font-bold">📍 Shop location (Directions kosam)</h2>
+          <p className="text-sm text-muted">Shop lo nilabadi "Use my current location" tap cheyyandi. Leda Google Maps lo mee shop open chesi <strong>Share → Copy link</strong> chesi paste cheyyandi.</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="button" className="btn-primary" onClick={captureLocation} disabled={locBusy}>{locBusy ? 'Location teeskuntunnam…' : '📍 Use my current location'}</button>
+          {f.shopLat && <a className="text-sm font-semibold text-brand underline" href={`https://www.google.com/maps?q=${f.shopLat},${f.shopLng}`} target="_blank" rel="noreferrer">Map lo chudandi</a>}
+          {f.shopLat && <button type="button" className="text-sm font-semibold text-red-700 underline" onClick={() => setF({ ...f, shopLat: null, shopLng: null })}>Remove</button>}
+        </div>
+        {locMsg && <p className="text-sm font-semibold">{locMsg}</p>}
+        <Field label="Leda Google Maps link" id="sh-map" hint="e.g. https://maps.app.goo.gl/…"><input id="sh-map" className="input" value={f.shopMapUrl} onChange={set('shopMapUrl')} /></Field>
+      </section>
+
+      <section className="card p-5 flex flex-col gap-4">
+        <div>
+          <h2 className="text-lg font-bold">Customers ki em options kanipinchali?</h2>
+          <p className="text-sm text-muted">ON chesinave shop lo kanipistayi.</p>
+        </div>
         <div className="flex flex-col gap-3">
-          <label className="flex items-center gap-3 font-semibold"><input type="checkbox" className="w-5 h-5 accent-brand" checked={f.allowPickup} onChange={set('allowPickup')} /> Store pickup</label>
-          <label className="flex items-center gap-3 font-semibold"><input type="checkbox" className="w-5 h-5 accent-brand" checked={f.allowDelivery} onChange={set('allowDelivery')} /> Home delivery</label>
-          <label className="flex items-center gap-3 font-semibold"><input type="checkbox" className="w-5 h-5 accent-brand" checked={f.allowBooking} onChange={set('allowBooking')} /> Appointment booking (services kosam – salon, clinic, repair…)</label>
+          <label className="flex items-center gap-3 font-semibold"><input type="checkbox" className="w-5 h-5 accent-brand" checked={f.allowPickup} onChange={set('allowPickup')} /> 🥡 Takeaway / Store pickup</label>
+          <label className="flex items-center gap-3 font-semibold"><input type="checkbox" className="w-5 h-5 accent-brand" checked={f.allowDelivery} onChange={set('allowDelivery')} /> 🚚 Home delivery</label>
+          <label className="flex items-center gap-3 font-semibold"><input type="checkbox" className="w-5 h-5 accent-brand" checked={f.allowTable} onChange={set('allowTable')} /> 🍽️ Table booking (restaurants, cafés)</label>
+          <label className="flex items-center gap-3 font-semibold"><input type="checkbox" className="w-5 h-5 accent-brand" checked={f.allowBooking} onChange={set('allowBooking')} /> 📅 Appointment booking (services – salon, clinic, repair…)</label>
         </div>
         <div className="grid sm:grid-cols-3 gap-4">
           {f.allowDelivery && <Field label="Delivery charge (₹)" id="sh-fee"><input id="sh-fee" type="number" min="0" step="1" className="input" value={f.deliveryFee} onChange={set('deliveryFee')} /></Field>}

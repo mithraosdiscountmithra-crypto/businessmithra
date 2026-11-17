@@ -96,27 +96,27 @@ export default function Orders() {
         <div className="grid lg:grid-cols-2 gap-4">
           {(data?.orders || []).map((o) => {
             const [label, cls] = STATUS[o.status];
-            const nxt = NEXT[o.status];
+            const nxt = o.kind !== 'order' && o.status === 'confirmed' ? ['completed', o.kind === 'table' ? 'Guests came ✓' : 'Complete'] : NEXT[o.status];
             const lines = o.items.map((i) => `• ${i.name} × ${Number(i.qty)}`).join('\n');
             return (
               <article key={o.id} className={`card p-4 flex flex-col gap-3 ${o.status === 'new' ? 'ring-2 ring-red-300' : ''}`}>
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="font-extrabold">{o.number} <span className="text-xs font-semibold text-muted">· {o.kind === 'booking' ? 'Booking' : o.fulfilment === 'delivery' ? 'Home delivery' : 'Pickup'}</span></p>
+                    <p className="font-extrabold">{o.number} <span className="text-xs font-semibold text-muted">· {o.kind === 'table' ? `🍽️ Table for ${o.guests}` : o.kind === 'booking' ? 'Appointment' : o.fulfilment === 'delivery' ? '🚚 Home delivery' : '🥡 Takeaway'}</span></p>
                     <p className="text-sm">{o.customer ? <Link to={`/sales/customers/${o.customer.id}`} className="font-semibold text-brand">{o.name}</Link> : o.name} · {o.phone}</p>
                     <p className="text-xs text-muted">{fmtDateTime(o.createdAt)}</p>
                   </div>
                   <div className="flex flex-col items-end gap-1">
                     <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${cls}`}>{label}</span>
-                    <span className={`text-xs font-bold ${o.paymentStatus === 'paid' ? 'text-green-800' : 'text-orange-800'}`}>{o.paymentStatus === 'paid' ? `Paid${o.paymentMode ? ` · ${MODE_LABEL[o.paymentMode]}` : ''}` : 'Not paid'}</span>
+                    <span className={`text-xs font-bold ${Number(o.total) === 0 ? 'hidden' : ''} ${o.paymentStatus === 'paid' ? 'text-green-800' : 'text-orange-800'}`}>{o.paymentStatus === 'paid' ? `Paid${o.paymentMode ? ` · ${MODE_LABEL[o.paymentMode]}` : ''}` : 'Not paid'}</span>
                   </div>
                 </div>
-                <ul className="text-sm bg-gray-50 rounded-xl p-3 flex flex-col gap-1">
+                {o.items.length > 0 && <ul className="text-sm bg-gray-50 rounded-xl p-3 flex flex-col gap-1">
                   {o.items.map((i) => <li key={i.id} className="flex justify-between gap-2"><span>{i.name} × {Number(i.qty)}</span><span>{inr(Number(i.amount) + Number(i.taxAmount))}</span></li>)}
                   {Number(o.deliveryFee) > 0 && <li className="flex justify-between"><span>Delivery</span><span>{inr(o.deliveryFee)}</span></li>}
                   <li className="flex justify-between font-extrabold border-t border-gray-200 pt-1 mt-1"><span>Total</span><span>{inr(o.total)}</span></li>
-                </ul>
-                {o.preferredAt && <p className="text-sm"><strong>Time:</strong> {fmtDateTime(o.preferredAt)}</p>}
+                </ul>}
+                {o.preferredAt && <p className={o.kind === 'table' ? 'text-base font-bold' : 'text-sm'}><strong>{o.kind === 'table' ? '🕗 ' : 'Time: '}</strong>{fmtDateTime(o.preferredAt)}{o.kind === 'table' ? ` · ${o.guests} people` : ''}</p>}
                 {o.address && <p className="text-sm"><strong>Address:</strong> {o.address}</p>}
                 {o.fulfilment === 'delivery' && (() => {
                   const map = o.lat ? `https://www.google.com/maps/dir/?api=1&destination=${o.lat},${o.lng}` : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.address || '')}`;
@@ -132,8 +132,8 @@ export default function Orders() {
                 {o.note && <p className="text-sm"><strong>Note:</strong> {o.note}</p>}
                 <div className="flex flex-wrap gap-2">
                   {can.edit && nxt && <button type="button" className="btn-primary h-10 px-4" onClick={() => setStatus(o, nxt[0])}>{nxt[1]}</button>}
-                  <a className="btn h-10 px-4 bg-green-100 text-green-800" target="_blank" rel="noreferrer" href={waLink(o.phone, `Namaste ${o.name} garu, mee ${o.kind === 'booking' ? 'booking' : 'order'} ${o.number} ${o.status === 'new' ? 'maaku andindi' : `status: ${STATUS[o.status][0]}`}.\n${lines}\nTotal: ${inr(o.total)}\n\nDhanyavaadalu – ${me.business.name}`)}>WhatsApp</a>
-                  {can.edit && o.paymentStatus !== 'paid' && o.status !== 'cancelled' && (
+                  <a className="btn h-10 px-4 bg-green-100 text-green-800" target="_blank" rel="noreferrer" href={waLink(o.phone, o.kind === 'table' ? `Namaste ${o.name} garu, mee table booking ${o.number} (${o.guests} people, ${fmtDateTime(o.preferredAt)}) ${o.status === 'confirmed' ? 'confirm ayyindi ✅' : 'maaku andindi'}.\n\nDhanyavaadalu – ${me.business.name}` : `Namaste ${o.name} garu, mee ${o.kind === 'booking' ? 'booking' : 'order'} ${o.number} ${o.status === 'new' ? 'maaku andindi' : `status: ${STATUS[o.status][0]}`}.\n${lines}\nTotal: ${inr(o.total)}\n\nDhanyavaadalu – ${me.business.name}`)}>WhatsApp</a>
+                  {can.edit && o.paymentStatus !== 'paid' && o.status !== 'cancelled' && Number(o.total) > 0 && (
                     <>
                       <label className="sr-only" htmlFor={`pm-${o.id}`}>Mark paid</label>
                       <select id={`pm-${o.id}`} className="input h-10 w-auto" value="" onChange={(e) => e.target.value && markPaid(o, e.target.value)}>
@@ -144,7 +144,7 @@ export default function Orders() {
                   )}
                   {o.invoiceId ? (
                     <Link className="btn-ghost h-10 px-4" to={`/sales/invoices/${o.invoiceId}`}>Invoice</Link>
-                  ) : can.add && o.status !== 'cancelled' && (
+                  ) : can.add && o.status !== 'cancelled' && o.items.length > 0 && (
                     <button type="button" className="btn-ghost h-10 px-4" onClick={() => toInvoice(o)}>Make invoice</button>
                   )}
                   {can.edit && !['completed', 'cancelled'].includes(o.status) && (

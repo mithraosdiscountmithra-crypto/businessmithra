@@ -118,7 +118,7 @@ export default function Storefront() {
   const [sheet, setSheet] = useState(null); // 'cart' | {type:'item'|'book'|'ask', item}
   const saved = getMe();
   const [me, setMeState] = useState(saved);
-  const [form, setForm] = useState({ name: saved?.name || '', phone: saved?.phone || '', address: saved?.address || '', note: '', fulfilment: 'pickup', preferredAt: '', message: '' });
+  const [form, setForm] = useState({ name: saved?.name || '', phone: saved?.phone || '', address: saved?.address || '', note: '', fulfilment: 'pickup', preferredAt: '', message: '', guests: 2 });
   const [myOrders, setMyOrders] = useState(null);
   const [otpStep, setOtpStep] = useState(false);
   const [addrs, setAddrs] = useState([]);
@@ -176,39 +176,40 @@ export default function Storefront() {
     setMeState(m);
   };
 
-  const sayHello = async (e) => {
-    e.preventDefault();
+  const sendOtpCode = async () => {
+    await api('/shop/otp/send', { method: 'POST', body: { phone: form.phone, name: form.name } });
+    setOtp('');
+    setOtpStep(true);
+  };
+
+  const resendOtp = async () => {
     setFormErr('');
-    setBusy(true);
     try {
-      if (shop.otp) {
-        await api('/shop/otp/send', { method: 'POST', body: { phone: form.phone, name: form.name } });
-        setOtp('');
-        setOtpStep(true);
-      } else {
-        await finishHello();
-      }
+      await sendOtpCode();
     } catch (x) {
       setFormErr(x.message);
-    } finally {
-      setBusy(false);
     }
   };
 
-  const checkOtp = async (e) => {
-    e.preventDefault();
-    setFormErr('');
-    setBusy(true);
-    try {
-      const r = await api('/shop/otp/verify', { method: 'POST', body: { phone: form.phone, code: otp } });
-      setShopToken(r.token);
-      await finishHello();
-      setOtpStep(false);
-    } catch (x) {
-      setFormErr(x.message);
-    } finally {
-      setBusy(false);
+  // OTP is asked only when the customer places an order / booking (not when they open the shop).
+  // Returns true when the customer is verified and the order can go.
+  const ensureLogin = async () => {
+    if (form.name.trim().length < 2) throw new Error('Mee peru enter cheyyandi');
+    if (!/^[6-9]\d{9}$/.test(form.phone.trim())) throw new Error('Correct 10-digit mobile number enter cheyyandi');
+    const verifiedSame = getShopToken() && me?.phone === form.phone.trim();
+    if (!shop.otp || verifiedSame) {
+      if (!me || me.phone !== form.phone.trim() || me.name !== form.name.trim()) await finishHello();
+      return true;
     }
+    if (!otpStep) {
+      await sendOtpCode();
+      return false;
+    }
+    const r = await api('/shop/otp/verify', { method: 'POST', body: { phone: form.phone, code: otp } });
+    setShopToken(r.token);
+    await finishHello();
+    setOtpStep(false);
+    return true;
   };
 
   const openMyOrders = async () => {
@@ -288,13 +289,15 @@ export default function Storefront() {
     setFormErr('');
     setBusy(true);
     try {
+      if (!(await ensureLogin())) return;
       const body = {
         kind,
         name: form.name, phone: form.phone, address: form.address, note: form.note,
-        fulfilment: kind === 'booking' ? 'pickup' : form.fulfilment,
+        fulfilment: kind === 'order' ? form.fulfilment : 'pickup',
+        guests: kind === 'table' ? Number(form.guests) : null,
         ...(kind === 'order' && form.fulfilment === 'delivery' ? { lat: loc?.lat ?? null, lng: loc?.lng ?? null, landmark, saveAddress: saveAddr, addressLabel: addrLabel } : {}),
         preferredAt: form.preferredAt ? new Date(form.preferredAt).toISOString() : '',
-        items: kind === 'booking' ? [{ itemId: bookItem.id, variantId: firstInStock(bookItem), qty: 1 }] : cartLines.map((l) => ({ itemId: l.item.id, variantId: l.variant?.id || null, qty: l.qty })),
+        items: kind === 'table' ? [] : kind === 'booking' ? [{ itemId: bookItem.id, variantId: firstInStock(bookItem), qty: 1 }] : cartLines.map((l) => ({ itemId: l.item.id, variantId: l.variant?.id || null, qty: l.qty })),
       };
       const r = await api(`/shop/${slug}/orders`, { method: 'POST', body, headers: authHeaders() });
       addOrderToken(slug, r.token);
@@ -332,6 +335,30 @@ export default function Storefront() {
   if (err) return <div className="min-h-screen flex items-center justify-center p-6 text-center"><div><p className="text-xl font-bold">Shop not found</p><p className="text-muted mt-1">Ee link lo shop ledu leda temporary ga close ayyindi.</p></div></div>;
   if (!data) return <div className="min-h-screen flex items-center justify-center text-muted">Loading shop…</div>;
 
+  const verified = Boolean(me && getShopToken() && me.phone === form.phone.trim());
+  const ready = Boolean(me && (!shop.otp || verified) && me.phone === form.phone.trim());
+  const cta = (base) => (ready || !shop.otp ? base : otpStep ? `Verify OTP & ${base}` : 'Send OTP & continue');
+
+  const contactAuth = ready ? (
+    <p className="text-sm bg-gray-50 rounded-xl p-3">
+      {shop.otp ? '✅ ' : ''}<strong>{me.name}</strong> · {me.phone}{' '}
+      <button type="button" className="underline font-semibold text-xs ml-1" onClick={() => { clearMe(); setShopToken(null); setMeState(null); setOtpStep(false); setForm((f) => ({ ...f, name: '', phone: '' })); }}>Change</button>
+    </p>
+  ) : (
+    <>
+      <div><label className="label" htmlFor="s-name">Mee peru</label><input id="s-name" required className="input" value={form.name} onChange={setF('name')} autoComplete="name" disabled={otpStep} /></div>
+      <div><label className="label" htmlFor="s-phone">{shop.otp ? 'WhatsApp number' : 'Mobile number'}</label><input id="s-phone" required inputMode="numeric" maxLength={10} className="input" value={form.phone} onChange={setF('phone')} autoComplete="tel-national" disabled={otpStep} /></div>
+      {otpStep && (
+        <div className="flex flex-col gap-2 rounded-xl bg-green-50 p-3">
+          <label className="label mb-0" htmlFor="s-otp">WhatsApp lo vachina 6-digit OTP</label>
+          <input id="s-otp" required inputMode="numeric" autoComplete="one-time-code" maxLength={6} className="input text-center text-2xl tracking-[0.5em] font-bold h-14" value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))} autoFocus />
+          <p className="text-xs text-muted">+91 {form.phone} ki pampamu · <button type="button" className="underline font-semibold" onClick={() => { setOtpStep(false); setFormErr(''); }}>Number marchandi</button> · <button type="button" className="underline font-semibold" onClick={resendOtp}>Malli pampandi</button></p>
+        </div>
+      )}
+      {shop.otp && !otpStep && <p className="text-xs text-muted">Order confirm cheyyadaniki WhatsApp lo OTP vastundi. Okkasari chaalu.</p>}
+    </>
+  );
+
   const contactFields = (
     <>
       <div><label className="label" htmlFor="s-name">Mee peru</label><input id="s-name" required className="input" value={form.name} onChange={setF('name')} autoComplete="name" /></div>
@@ -355,9 +382,15 @@ export default function Storefront() {
         <div className="max-w-5xl mx-auto px-4 pt-3 flex flex-wrap gap-2 text-sm">
           {shop.phone && <a href={`https://wa.me/91${shop.phone}`} target="_blank" rel="noreferrer" className="h-10 px-4 rounded-xl bg-green-600 text-white font-bold flex items-center">WhatsApp</a>}
           {shop.phone && <a href={`tel:${shop.phone}`} className="h-10 px-4 rounded-xl bg-white border border-gray-300 font-bold flex items-center">Call</a>}
-          {(shop.address || shop.city) && <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([shop.name, shop.address, shop.city].filter(Boolean).join(', '))}`} target="_blank" rel="noreferrer" className="h-10 px-4 rounded-xl bg-white border border-gray-300 font-bold flex items-center">Directions</a>}
+          {(shop.lat || shop.mapUrl || shop.address || shop.city) && (
+            <a
+              href={shop.lat ? `https://www.google.com/maps/dir/?api=1&destination=${shop.lat},${shop.lng}` : shop.mapUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([shop.name, shop.address, shop.city].filter(Boolean).join(', '))}`}
+              target="_blank" rel="noreferrer" className="h-10 px-4 rounded-xl bg-white border border-gray-300 font-bold flex items-center"
+            >📍 Directions</a>
+          )}
+          {shop.allowTable && <button type="button" onClick={() => { setFormErr(''); setSheet('table'); }} className="h-10 px-4 rounded-xl text-white font-bold" style={{ background: color }}>🍽️ Book a table</button>}
           <button type="button" onClick={() => { setSent(false); setSheet({ type: 'ask' }); }} className="h-10 px-4 rounded-xl bg-white border border-gray-300 font-bold">Ask a question</button>
-          {me && <button type="button" onClick={openMyOrders} className="h-10 px-4 rounded-xl bg-white border border-gray-300 font-bold">My Orders</button>}
+          {(me || getOrderTokens(slug).length > 0) && <button type="button" onClick={openMyOrders} className="h-10 px-4 rounded-xl bg-white border border-gray-300 font-bold">My Orders</button>}
         </div>
         {me && (
           <p className="max-w-5xl mx-auto px-4 pt-2 text-xs text-gray-600">
@@ -368,7 +401,9 @@ export default function Storefront() {
         <div className="max-w-5xl mx-auto px-4 pt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
           {shop.timings && <span>🕒 {shop.timings}</span>}
           {shop.city && <span>📍 {[shop.address, shop.city].filter(Boolean).join(', ')}</span>}
+          {shop.allowPickup && <span>🥡 Takeaway</span>}
           {shop.allowDelivery && <span>🚚 Home delivery{shop.deliveryFee ? ` ₹${shop.deliveryFee}` : ' free'}</span>}
+          {shop.allowTable && <span>🍽️ Table booking</span>}
           {shop.minOrder > 0 && <span>Min. order {inr(shop.minOrder)}</span>}
         </div>
       </header>
@@ -468,14 +503,14 @@ export default function Storefront() {
             {shop.allowPickup && shop.allowDelivery && (
               <fieldset className="grid grid-cols-2 gap-2">
                 <legend className="label">Ela teeskuntaru?</legend>
-                {[['pickup', 'Store pickup'], ['delivery', 'Home delivery']].map(([v, l]) => (
+                {[['pickup', 'Takeaway / Pickup'], ['delivery', 'Home delivery']].map(([v, l]) => (
                   <label key={v} className="h-12 rounded-xl border-2 flex items-center justify-center gap-2 font-semibold text-sm cursor-pointer" style={form.fulfilment === v ? { borderColor: color } : { borderColor: '#E5E7EB' }}>
                     <input type="radio" name="ful" value={v} checked={form.fulfilment === v} onChange={setF('fulfilment')} className="accent-current" /> {l}
                   </label>
                 ))}
               </fieldset>
             )}
-            {contactFields}
+            {contactAuth}
             {form.fulfilment === 'delivery' && (
               <fieldset className="flex flex-col gap-3 rounded-2xl border border-gray-200 p-3">
                 <legend className="label px-1">Delivery address</legend>
@@ -525,7 +560,7 @@ export default function Storefront() {
             {shop.minOrder > 0 && itemsTotal < shop.minOrder && <p className="text-sm font-semibold text-orange-800">Minimum order {inr(shop.minOrder)}. Inka {inr(shop.minOrder - itemsTotal)} add cheyyandi.</p>}
             {formErr && <p className="error-box" role="alert">{formErr}</p>}
             <button type="submit" disabled={busy || (shop.minOrder > 0 && itemsTotal < shop.minOrder)} className="h-14 rounded-2xl text-white font-bold text-base disabled:opacity-60" style={{ background: color }}>
-              {busy ? 'Placing order…' : 'Place order'}
+              {busy ? 'Please wait…' : cta('Place order')}
             </button>
             <p className="text-xs text-center text-muted">Order ayyaka shop vaallu confirm chestaru.{shop.upi ? ' UPI tho ventane pay cheyyochu.' : ''}</p>
           </form>
@@ -537,41 +572,13 @@ export default function Storefront() {
           <form onSubmit={(e) => placeOrder(e, 'booking', sheet.item)} className="flex flex-col gap-4">
             <p className="text-sm">{inr(sheet.item.price)}</p>
             <div><label className="label" htmlFor="s-when">Eppudu raavali?</label><input id="s-when" type="datetime-local" required className="input" value={form.preferredAt} onChange={setF('preferredAt')} /></div>
-            {contactFields}
+            {contactAuth}
             <div><label className="label" htmlFor="s-bnote">Note (optional)</label><input id="s-bnote" className="input" value={form.note} onChange={setF('note')} /></div>
             {formErr && <p className="error-box" role="alert">{formErr}</p>}
-            <button type="submit" disabled={busy} className="h-14 rounded-2xl text-white font-bold text-base disabled:opacity-60" style={{ background: color }}>{busy ? 'Booking…' : 'Request booking'}</button>
+            <button type="submit" disabled={busy} className="h-14 rounded-2xl text-white font-bold text-base disabled:opacity-60" style={{ background: color }}>{busy ? 'Please wait…' : cta('Request booking')}</button>
             <p className="text-xs text-center text-muted">Shop vaallu time confirm chesi meeku cheptaru.</p>
           </form>
         </Sheet>
-      )}
-
-      {!me && (
-        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60" role="dialog" aria-modal="true" aria-label="Welcome">
-          <form onSubmit={otpStep ? checkOtp : sayHello} className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl p-6 flex flex-col gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-14 h-14 rounded-2xl overflow-hidden flex items-center justify-center bg-gray-100 shrink-0">
-                {shop.logo ? <img src={shop.logo} alt="" className="w-full h-full object-cover" /> : <span className="text-2xl font-extrabold" style={{ color }}>{shop.name.slice(0, 1)}</span>}
-              </div>
-              <div>
-                <h2 className="text-lg font-extrabold">Welcome to {shop.name}! 🙏</h2>
-                <p className="text-sm text-gray-600">{shop.otp ? 'Mee peru, WhatsApp number tho login avvandi. Mee orders eppudaina, ye phone lo ayina chudochu.' : 'Mee peru, mobile number cheppandi. Mee orders ee phone lo save avutayi.'}</p>
-              </div>
-            </div>
-            {otpStep ? (
-              <div className="flex flex-col gap-2">
-                <label className="label" htmlFor="s-otp">WhatsApp lo vachina 6-digit OTP</label>
-                <input id="s-otp" required inputMode="numeric" autoComplete="one-time-code" maxLength={6} className="input text-center text-2xl tracking-[0.5em] font-bold h-14" value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))} autoFocus />
-                <p className="text-xs text-muted">+91 {form.phone} ki pampamu · <button type="button" className="underline font-semibold" onClick={() => { setOtpStep(false); setFormErr(''); }}>Number marchandi</button> · <button type="button" className="underline font-semibold" onClick={sayHello}>Malli pampandi</button></p>
-              </div>
-            ) : contactFields}
-            {formErr && <p className="error-box" role="alert">{formErr}</p>}
-            <button type="submit" disabled={busy} className="h-14 rounded-2xl text-white font-bold text-base disabled:opacity-60" style={{ background: color }}>
-              {busy ? 'Please wait…' : otpStep ? 'Verify & continue' : shop.otp ? 'Send OTP on WhatsApp' : 'Continue to shop'}
-            </button>
-            <p className="text-xs text-center text-muted">Mee number {shop.name} tho matrame share avutundi.</p>
-          </form>
-        </div>
       )}
 
       {sheet === 'orders' && (
@@ -593,6 +600,31 @@ export default function Storefront() {
               ))}
             </ul>
           )}
+        </Sheet>
+      )}
+
+      {sheet === 'table' && (
+        <Sheet title="Book a table" onClose={() => { setSheet(null); setOtpStep(false); }}>
+          <form onSubmit={(e) => placeOrder(e, 'table')} className="flex flex-col gap-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2"><label className="label" htmlFor="t-when">Date & time</label><input id="t-when" type="datetime-local" required className="input" value={form.preferredAt} onChange={setF('preferredAt')} /></div>
+              <div className="col-span-2">
+                <span className="label">Enta mandi?</span>
+                <div className="flex flex-wrap gap-2" role="group" aria-label="Number of people">
+                  {[1, 2, 3, 4, 5, 6, 8, 10].map((n) => (
+                    <button key={n} type="button" aria-pressed={Number(form.guests) === n} onClick={() => setForm({ ...form, guests: n })} className="w-12 h-11 rounded-xl border-2 font-bold" style={Number(form.guests) === n ? { borderColor: color, background: color, color: '#fff' } : { borderColor: '#E5E7EB' }}>{n}</button>
+                  ))}
+                  <label className="sr-only" htmlFor="t-more">More people</label>
+                  <input id="t-more" type="number" min="1" max="100" className="input w-20 h-11" placeholder="More" value={[1, 2, 3, 4, 5, 6, 8, 10].includes(Number(form.guests)) ? '' : form.guests} onChange={(e) => setForm({ ...form, guests: e.target.value })} />
+                </div>
+              </div>
+            </div>
+            {contactAuth}
+            <div><label className="label" htmlFor="t-note">Note (optional)</label><input id="t-note" className="input" value={form.note} onChange={setF('note')} placeholder="e.g. Birthday, AC section, high chair" /></div>
+            {formErr && <p className="error-box" role="alert">{formErr}</p>}
+            <button type="submit" disabled={busy} className="h-14 rounded-2xl text-white font-bold text-base disabled:opacity-60" style={{ background: color }}>{busy ? 'Please wait…' : cta('Book table')}</button>
+            <p className="text-xs text-center text-muted">Restaurant vaallu confirm chesi meeku WhatsApp lo cheptaru.</p>
+          </form>
         </Sheet>
       )}
 

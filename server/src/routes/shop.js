@@ -33,7 +33,8 @@ const publicBusiness = (b) => ({
   name: b.name, slug: b.slug, type: b.type, tagline: b.shopTagline, about: b.shopAbout, logo: b.shopLogo, cover: b.shopCover,
   color: b.shopColor, timings: b.shopTimings, phone: b.phone, address: b.address, city: b.city, state: b.state,
   upi: Boolean(b.upiId), allowPickup: b.allowPickup, allowDelivery: b.allowDelivery, deliveryFee: num(b.deliveryFee),
-  minOrder: num(b.minOrder), allowBooking: b.allowBooking, otp: otpEnabled(),
+  minOrder: num(b.minOrder), allowBooking: b.allowBooking, allowTable: b.allowTable, otp: otpEnabled(),
+  lat: b.shopLat, lng: b.shopLng, mapUrl: b.shopMapUrl,
 });
 
 router.get('/:slug', h(async (req, res) => {
@@ -58,14 +59,15 @@ router.get('/:slug', h(async (req, res) => {
 
 const phone = z.string().trim().regex(/^[6-9]\d{9}$/, 'Enter a valid 10-digit mobile number');
 const orderSchema = z.object({
-  kind: z.enum(['order', 'booking']).default('order'),
+  kind: z.enum(['order', 'booking', 'table']).default('order'),
+  guests: z.preprocess((v) => (v === null || v === '' || v === undefined ? null : Number(v)), z.number().int().min(1, 'How many people?').max(100).nullable()),
   name: z.string().trim().min(2, 'Enter your name').max(80),
   phone,
   address: z.string().trim().max(400).optional().nullable().or(z.literal('')).transform((v) => v || null),
   note: z.string().trim().max(500).optional().nullable().or(z.literal('')).transform((v) => v || null),
   fulfilment: z.enum(['pickup', 'delivery']).default('pickup'),
-  lat: z.coerce.number().min(-90).max(90).optional().nullable(),
-  lng: z.coerce.number().min(-180).max(180).optional().nullable(),
+  lat: z.preprocess((v) => (v === null || v === '' || v === undefined ? null : Number(v)), z.number().min(-90).max(90).nullable()),
+  lng: z.preprocess((v) => (v === null || v === '' || v === undefined ? null : Number(v)), z.number().min(-180).max(180).nullable()),
   landmark: z.string().trim().max(120).optional().nullable().or(z.literal('')).transform((v) => v || null),
   saveAddress: z.boolean().optional(),
   addressLabel: z.enum(['Home', 'Work', 'Other']).optional(),
@@ -74,7 +76,7 @@ const orderSchema = z.object({
     itemId: z.string().min(1),
     variantId: z.string().max(24).optional().nullable(),
     qty: z.coerce.number().positive().max(10000),
-  })).min(1, 'Your cart is empty').max(100),
+  })).max(100).default([]),
 });
 
 async function findOrCreateCustomer(businessId, name, phoneNo, address) {
@@ -91,13 +93,17 @@ router.post('/:slug/orders', writeLimiter, h(async (req, res) => {
   const b = await loadShop(req.params.slug);
   const d = orderSchema.parse(req.body);
   if (d.kind === 'booking' && !b.allowBooking) throw new HttpError(400, 'This shop is not taking bookings online');
+  if (d.kind === 'table' && !b.allowTable) throw new HttpError(400, 'Table booking is not available');
+  if (d.kind === 'table' && !d.guests) throw new HttpError(400, 'How many people are coming?');
+  if (d.kind !== 'table' && d.items.length === 0) throw new HttpError(400, 'Your cart is empty');
   if (d.kind === 'order') {
     if (d.fulfilment === 'delivery' && !b.allowDelivery) throw new HttpError(400, 'Home delivery is not available');
     if (d.fulfilment === 'pickup' && !b.allowPickup) throw new HttpError(400, 'Store pickup is not available');
     if (d.fulfilment === 'delivery' && !d.address) throw new HttpError(400, 'Enter your delivery address');
   }
   if (d.preferredAt && Number.isNaN(d.preferredAt.getTime())) throw new HttpError(400, 'Choose a valid date and time');
-  if (d.kind === 'booking' && !d.preferredAt) throw new HttpError(400, 'Choose a date and time');
+  if (d.kind !== 'order' && !d.preferredAt) throw new HttpError(400, 'Choose a date and time');
+  if (d.preferredAt && d.preferredAt.getTime() < Date.now() - 3600000) throw new HttpError(400, 'Please choose a future date and time');
 
   const ids = [...new Set(d.items.map((i) => i.itemId))];
   const dbItems = await prisma.item.findMany({ where: { id: { in: ids }, businessId: b.id, active: true, showInShop: true } });
@@ -128,11 +134,12 @@ router.post('/:slug/orders', writeLimiter, h(async (req, res) => {
     return tx.shopOrder.create({
       data: {
         businessId: b.id,
-        number: `${d.kind === 'booking' ? 'BK' : 'ORD'}-${bb.nextOrderNo - 1}`,
+        number: `${{ booking: 'BK', table: 'TB' }[d.kind] || 'ORD'}-${bb.nextOrderNo - 1}`,
         kind: d.kind,
+        guests: d.kind === 'table' ? d.guests : null,
         token: crypto.randomBytes(16).toString('hex'),
         customerId, name: d.name, phone: d.phone, address: d.address, note: d.note,
-        fulfilment: d.kind === 'booking' ? 'pickup' : d.fulfilment,
+        fulfilment: d.kind === 'order' ? d.fulfilment : 'pickup',
         lat: d.fulfilment === 'delivery' ? d.lat ?? null : null,
         lng: d.fulfilment === 'delivery' ? d.lng ?? null : null,
         preferredAt: d.preferredAt,
@@ -254,7 +261,7 @@ router.get('/order/:token', h(async (req, res) => {
     : null;
   res.json({
     order: {
-      number: o.number, kind: o.kind, status: o.status, name: o.name, phone: o.phone, address: o.address, note: o.note,
+      number: o.number, kind: o.kind, guests: o.guests, status: o.status, name: o.name, phone: o.phone, address: o.address, note: o.note,
       fulfilment: o.fulfilment, preferredAt: o.preferredAt, subtotal: o.subtotal, taxTotal: o.taxTotal, deliveryFee: o.deliveryFee,
       total: o.total, paymentStatus: o.paymentStatus, createdAt: o.createdAt,
       items: o.items.map((i) => ({ name: i.name, qty: i.qty, unit: i.unit, lineTotal: r2(num(i.amount) + num(i.taxAmount)) })),

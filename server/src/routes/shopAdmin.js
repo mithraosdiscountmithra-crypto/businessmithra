@@ -27,6 +27,7 @@ const shopFields = (b) => ({
   slug: b.slug, shopEnabled: b.shopEnabled, shopTagline: b.shopTagline || '', shopAbout: b.shopAbout || '', shopLogo: b.shopLogo || '',
   shopCover: b.shopCover || '', shopColor: b.shopColor, shopTimings: b.shopTimings || '', upiId: b.upiId || '',
   allowPickup: b.allowPickup, allowDelivery: b.allowDelivery, deliveryFee: num(b.deliveryFee), minOrder: num(b.minOrder), allowBooking: b.allowBooking,
+  allowTable: b.allowTable, shopLat: b.shopLat, shopLng: b.shopLng, shopMapUrl: b.shopMapUrl || '',
 });
 
 const url = z.string().trim().max(500).refine((v) => v === '' || /^https:\/\//.test(v), 'Image link must start with https://').transform((v) => v || null);
@@ -47,6 +48,10 @@ const settingsSchema = z.object({
   deliveryFee: z.coerce.number().min(0).max(100000),
   minOrder: z.coerce.number().min(0).max(10000000),
   allowBooking: z.boolean(),
+  allowTable: z.boolean().default(false),
+  shopLat: z.preprocess((v) => (v === null || v === '' || v === undefined ? null : Number(v)), z.number().min(-90).max(90).nullable()),
+  shopLng: z.preprocess((v) => (v === null || v === '' || v === undefined ? null : Number(v)), z.number().min(-180).max(180).nullable()),
+  shopMapUrl: z.string().trim().max(500).refine((v) => v === '' || /^https:\/\/(maps\.app\.goo\.gl|goo\.gl\/maps|(www\.)?google\.[a-z.]+\/maps|maps\.google\.[a-z.]+)/.test(v), 'Paste a Google Maps link (https://maps.app.goo.gl/…)').transform((v) => v || null).optional(),
 });
 
 router.get('/settings', requireOwner, h(async (req, res) => {
@@ -57,7 +62,7 @@ router.get('/settings', requireOwner, h(async (req, res) => {
 
 router.put('/settings', requireOwner, h(async (req, res) => {
   const d = settingsSchema.parse(req.body);
-  if (!d.allowPickup && !d.allowDelivery && !d.allowBooking) throw new HttpError(400, 'Turn on at least one of pickup, delivery or booking');
+  if (!d.allowPickup && !d.allowDelivery && !d.allowBooking && !d.allowTable) throw new HttpError(400, 'Turn on at least one: takeaway, delivery, table booking or appointment');
   const dup = await prisma.business.findFirst({ where: { slug: d.slug, NOT: { id: req.businessId } } });
   if (dup) throw new HttpError(409, 'This shop link is already taken. Try another.');
   const b = await prisma.business.update({ where: { id: req.businessId }, data: d });

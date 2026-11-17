@@ -47,6 +47,10 @@ model Business {
   deliveryFee   Decimal        @default(0) @db.Decimal(12, 2)
   minOrder      Decimal        @default(0) @db.Decimal(12, 2)
   allowBooking  Boolean        @default(false)
+  allowTable    Boolean        @default(false) // restaurant table booking
+  shopLat       Float?
+  shopLng       Float?
+  shopMapUrl    String?
   nextOrderNo   Int            @default(1)
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
@@ -389,7 +393,8 @@ model ShopOrder {
   businessId    String
   business      Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
   number        String
-  kind          String           @default("order") // order, booking
+  kind          String           @default("order") // order, booking, table
+  guests        Int?
   token         String           @unique
   customerId    String?
   customer      Customer?        @relation(fields: [customerId], references: [id], onDelete: SetNull)
