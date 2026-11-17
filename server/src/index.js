@@ -26,6 +26,7 @@ import billingRoutes from './routes/billing.js';
 import adminRoutes from './routes/admin.js';
 import membershipRoutes from './routes/memberships.js';
 import { Prisma } from '@prisma/client';
+import { prisma } from './lib/prisma.js';
 
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
   console.error('JWT_SECRET is missing or shorter than 32 characters. Set it in Render > Environment.');
@@ -91,11 +92,75 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/memberships', membershipRoutes);
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
 
+// ── Google / WhatsApp friendly pages ──
+const siteUrl = (req) => (process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+const esc = (t) => String(t ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+app.get('/robots.txt', (req, res) => {
+  res.type('text/plain').send(`User-agent: *\nAllow: /s/\nDisallow: /admin\nDisallow: /api/\nDisallow: /i/\nDisallow: /o/\nSitemap: ${siteUrl(req)}/sitemap.xml\n`);
+});
+
+app.get('/sitemap.xml', async (req, res, next) => {
+  try {
+    const shops = await prisma.business.findMany({ where: { shopEnabled: true, status: 'active', slug: { not: null } }, select: { slug: true, updatedAt: true }, take: 50000 });
+    const base = siteUrl(req);
+    const urls = [`<url><loc>${base}/</loc></url>`, ...shops.map((s2) => `<url><loc>${base}/s/${esc(s2.slug)}</loc><lastmod>${s2.updatedAt.toISOString().slice(0, 10)}</lastmod></url>`)];
+    res.type('application/xml').send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.join('')}</urlset>`);
+  } catch (e) {
+    next(e);
+  }
+});
+
 // The same server also serves the built web app (one Render service, one URL).
 const webDist = path.resolve(__dirname, '../../web/dist');
 if (fs.existsSync(webDist)) {
+  const indexHtml = fs.readFileSync(path.join(webDist, 'index.html'), 'utf8');
   app.use(express.static(webDist, { index: false, maxAge: '1h' }));
-  app.get('*', (_req, res) => res.sendFile(path.join(webDist, 'index.html')));
+
+  // Shop pages get their own title, description, preview image and business details for Google & WhatsApp.
+  app.get('/s/:slug', async (req, res) => {
+    let html = indexHtml;
+    try {
+      const b = await prisma.business.findUnique({ where: { slug: String(req.params.slug).toLowerCase() } });
+      if (b && b.shopEnabled && b.status === 'active') {
+        const url = `${siteUrl(req)}/s/${b.slug}`;
+        const place = [b.city, b.state].filter(Boolean).join(', ');
+        const title = `${b.name}${place ? ` – ${b.city || b.state}` : ''} | Order Online`;
+        const desc = (b.shopTagline || b.shopAbout || `${b.name}${place ? ` in ${place}` : ''}. Order online, home delivery, book and pay by UPI.`).slice(0, 160);
+        const img = b.shopCover || b.shopLogo || '';
+        const ld = {
+          '@context': 'https://schema.org',
+          '@type': b.type === 'restaurant' ? 'Restaurant' : 'LocalBusiness',
+          name: b.name, url, telephone: b.phone ? `+91${b.phone}` : undefined, image: img || undefined, description: desc,
+          address: b.address || b.city ? { '@type': 'PostalAddress', streetAddress: b.address || undefined, addressLocality: b.city || undefined, addressRegion: b.state || undefined, addressCountry: 'IN' } : undefined,
+          geo: b.shopLat ? { '@type': 'GeoCoordinates', latitude: b.shopLat, longitude: b.shopLng } : undefined,
+          openingHours: b.shopTimings || undefined,
+        };
+        const head = [
+          `<title>${esc(title)}</title>`,
+          `<meta name="description" content="${esc(desc)}" />`,
+          `<link rel="canonical" href="${esc(url)}" />`,
+          `<meta property="og:type" content="website" />`,
+          `<meta property="og:title" content="${esc(b.name)}" />`,
+          `<meta property="og:description" content="${esc(desc)}" />`,
+          `<meta property="og:url" content="${esc(url)}" />`,
+          img ? `<meta property="og:image" content="${esc(img)}" />` : '',
+          `<meta name="twitter:card" content="${img ? 'summary_large_image' : 'summary'}" />`,
+          `<script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\\u003c')}</script>`,
+        ].join('\n    ');
+        html = html.replace(/<title>[\s\S]*?<\/title>/, head);
+      }
+    } catch (e) {
+      console.error('shop meta failed', e.message);
+    }
+    res.set('Cache-Control', 'no-cache').type('html').send(html);
+  });
+
+  app.get('*', (req, res) => {
+    // Private pages stay out of Google.
+    if (/^\/(admin|i|o|login|signup|sales|accounts|settings|staff|shop|billing|bill|memberships|m)(\/|$)/.test(req.path)) res.set('X-Robots-Tag', 'noindex');
+    res.set('Cache-Control', 'no-cache').type('html').send(indexHtml);
+  });
 }
 
 // eslint-disable-next-line no-unused-vars
