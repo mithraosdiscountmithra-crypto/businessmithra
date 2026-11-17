@@ -8,6 +8,8 @@ All-in-one business software (CRM + ERP) for small businesses: Sales, Marketing,
 
 **Phase 2 · Accounts:** cash/bank/UPI accounts with opening balances and live balances, expenses with categories and input GST, day book with running balance, Profit & Loss, GST summary by rate (GSTR-1/3B ready data), cash flow by payment mode.
 
+**Online Shop:** every business gets its own shop page (`/s/<shop-link>`) with logo, cover, categories, product photos, MRP/discount, cart, store pickup or home delivery, appointment booking for services, questions that become Leads, order status page with UPI pay link and WhatsApp send-to-shop, QR code for the counter. Vendor side: Online Orders with auto-refresh and sound, confirm/ready/complete, mark paid, one-click GST invoice. Photo upload uses Cloudinary (set `CLOUDINARY_*` env vars on Render); without it, image links can be pasted.
+
 ## Phase 1A
 
 - Business signup in 3 steps (details → business type → owner account), 30-day free trial

@@ -46,6 +46,9 @@ function Sidebar({ onNavigate }) {
       {me.user.isOwner && (
         <>
           <div className="mt-3 mb-1 px-3 text-xs font-bold uppercase tracking-wider text-navy-200/80">Admin</div>
+          <NavLink to="/shop" className={linkClass} onClick={onNavigate}>
+            <Icon name="shop" /> Online Shop
+          </NavLink>
           <NavLink to="/staff" className={linkClass} onClick={onNavigate}>
             <Icon name="staff" /> Staff & Roles
           </NavLink>

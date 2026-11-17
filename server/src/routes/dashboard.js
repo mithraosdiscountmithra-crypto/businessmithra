@@ -23,7 +23,7 @@ router.get('/', h(async (req, res) => {
     const weekAgo = new Date(Date.now() - 7 * 86400000);
     const istStart = (d) => new Date(dateOnly(d).getTime() - 330 * 60000);
 
-    const [todaySales, yesterdaySales, monthSales, lastMonthToDate, dues, dueCount, newLeads, hotLeads, series, followUps, recent] = await Promise.all([
+    const [todaySales, yesterdaySales, monthSales, lastMonthToDate, dues, dueCount, newLeads, hotLeads, series, followUps, recent, newOrders] = await Promise.all([
       sumTotal({ ...live, date: dateOnly(today) }),
       sumTotal({ ...live, date: dateOnly(yesterday) }),
       sumTotal({ ...live, date: { gte: dateOnly(thisMonth), lt: dateOnly(addDays(today, 1)) } }),
@@ -49,12 +49,13 @@ router.get('/', h(async (req, res) => {
         orderBy: { createdAt: 'desc' },
         take: 6,
       }),
+      prisma.shopOrder.count({ where: { businessId: b, status: 'new' } }),
     ]);
     const byDay = Object.fromEntries(series.map((s) => [s.date.toISOString().slice(0, 10), num(s._sum.total)]));
     out.sales = {
       todaySales, yesterdaySales, monthSales, lastMonthToDate,
       pendingAmount: r2(num(dues._sum.total) - num(dues._sum.amountPaid)), pendingCount: dueCount,
-      newLeads, hotLeads,
+      newLeads, hotLeads, newOrders,
       last7: Array.from({ length: 7 }, (_, i) => {
         const d = addDays(today, i - 6);
         return { date: d, total: byDay[d] || 0 };

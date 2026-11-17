@@ -62,6 +62,13 @@ export default function Dashboard() {
         )}
       </div>
 
+      {s?.newOrders > 0 && (
+        <Link to="/sales/orders" className="rounded-2xl bg-red-50 border-2 border-red-200 p-4 flex items-center justify-between gap-3">
+          <span className="font-bold text-red-800">🛍️ {s.newOrders} kotha online order{s.newOrders > 1 ? 's' : ''} vachayi!</span>
+          <span className="text-sm font-bold text-red-800">Chudandi →</span>
+        </Link>
+      )}
+
       {s && (
         <section aria-label="Key numbers" className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <Kpi label="Today's Sales" value={inr(s.todaySales)} icon="sales" tint="bg-blue-100 text-blue-800"

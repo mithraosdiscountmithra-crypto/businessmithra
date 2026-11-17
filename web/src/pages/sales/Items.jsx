@@ -3,13 +3,17 @@ import { api } from '../../api.js';
 import { useAuth } from '../../auth.jsx';
 import { Empty, ErrorBox, Field, Modal, PageHeader, SALES_NAV, SubNav, useApi, useForm } from '../../components/ui.jsx';
 import Icon from '../../components/Icon.jsx';
+import ImageUpload from '../../components/ImageUpload.jsx';
 import { GST_RATES, inr } from '../../lib/format.js';
 
 function ItemForm({ item, onClose, onSaved }) {
-  const [f, , set] = useForm({
+  const [f, setF, set] = useForm({
     name: item?.name || '', type: item?.type || 'product', sku: item?.sku || '', hsn: item?.hsn || '',
     unit: item?.unit || 'pcs', price: item?.price ?? '', taxRate: item?.taxRate ?? 5,
+    mrp: item?.mrp ?? '', description: item?.description || '', category: item?.category || '',
+    images: item?.images || [], showInShop: item?.showInShop ?? true, inStock: item?.inStock ?? true,
   });
+  const setImages = (images) => setF((x) => ({ ...x, images }));
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const save = async (e) => {
@@ -17,7 +21,7 @@ function ItemForm({ item, onClose, onSaved }) {
     setErr('');
     setBusy(true);
     try {
-      await api(item ? `/items/${item.id}` : '/items', { method: item ? 'PUT' : 'POST', body: { ...f, price: Number(f.price || 0), taxRate: Number(f.taxRate), active: true } });
+      await api(item ? `/items/${item.id}` : '/items', { method: item ? 'PUT' : 'POST', body: { ...f, price: Number(f.price || 0), taxRate: Number(f.taxRate), mrp: f.mrp === '' ? null : Number(f.mrp), active: true } });
       onSaved();
     } catch (x) {
       setErr(x.message);
@@ -45,6 +49,15 @@ function ItemForm({ item, onClose, onSaved }) {
           </Field>
           <Field label={f.type === 'service' ? 'SAC code' : 'HSN code'} id="i-hsn"><input id="i-hsn" className="input" value={f.hsn} onChange={set('hsn')} /></Field>
           <Field label="SKU / Code" id="i-sku"><input id="i-sku" className="input" value={f.sku} onChange={set('sku')} /></Field>
+        </div>
+        <h3 className="font-bold pt-2 border-t border-line">Online shop</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="sm:col-span-2"><ImageUpload images={f.images} onChange={setImages} max={4} /></div>
+          <Field label="Category (shop lo filter)" id="i-cat"><input id="i-cat" className="input" value={f.category} onChange={set('category')} placeholder="e.g. Silk Sarees" /></Field>
+          <Field label="MRP ₹ (strike price, optional)" id="i-mrp" hint="GST tho kalipi. Shop lo 'X% OFF' chupistundi"><input id="i-mrp" type="number" min="0" step="0.01" className="input" value={f.mrp} onChange={set('mrp')} /></Field>
+          <Field label="Description" id="i-desc" className="sm:col-span-2"><textarea id="i-desc" rows={2} className="input h-auto py-2.5" value={f.description} onChange={set('description')} /></Field>
+          <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" className="w-5 h-5 accent-brand" checked={f.showInShop} onChange={set('showInShop')} /> Online shop lo chupinchu</label>
+          <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" className="w-5 h-5 accent-brand" checked={f.inStock} onChange={set('inStock')} /> In stock</label>
         </div>
         <button type="submit" className="btn-primary" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
       </form>
@@ -90,7 +103,13 @@ export default function Items() {
             <tbody>
               {(data?.items || []).map((it) => (
                 <tr key={it.id} className="border-t border-gray-100">
-                  <td className="p-3 font-semibold">{it.name}{it.sku && <span className="block text-xs text-muted">{it.sku}</span>}</td>
+                  <td className="p-3">
+                    <div className="flex items-center gap-3">
+                      {it.images?.[0] ? <img src={it.images[0]} alt="" className="w-11 h-11 rounded-lg object-cover border border-line" /> : <span className="w-11 h-11 rounded-lg bg-gray-100 shrink-0" aria-hidden="true" />}
+                      <div><span className="font-semibold">{it.name}</span>
+                        <span className="block text-xs text-muted">{[it.category, it.sku, it.showInShop ? 'In shop' : 'Not in shop', it.inStock ? '' : 'Out of stock'].filter(Boolean).join(' · ')}</span></div>
+                    </div>
+                  </td>
                   <td className="p-3 capitalize">{it.type}</td>
                   <td className="p-3">{it.hsn || '—'}</td>
                   <td className="p-3 text-right font-semibold">{inr(it.price)} / {it.unit}</td>

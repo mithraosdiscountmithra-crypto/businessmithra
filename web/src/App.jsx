@@ -22,6 +22,10 @@ import AccountsOverview from './pages/accounts/Overview.jsx';
 import Expenses from './pages/accounts/Expenses.jsx';
 import DayBook from './pages/accounts/DayBook.jsx';
 import AccountsReports from './pages/accounts/AccountsReports.jsx';
+import Storefront from './pages/shop/Storefront.jsx';
+import OrderStatus from './pages/shop/OrderStatus.jsx';
+import Orders from './pages/sales/Orders.jsx';
+import ShopSettings from './pages/ShopSettings.jsx';
 
 function Splash() {
   return (
@@ -56,6 +60,10 @@ export default function App() {
       <Route path="/login" element={<PublicOnly><Login /></PublicOnly>} />
       <Route path="/signup" element={<PublicOnly><Signup /></PublicOnly>} />
       <Route path="/i/:token" element={<PublicInvoice />} />
+      <Route path="/s/:slug" element={<Storefront />} />
+      <Route path="/o/:token" element={<OrderStatus />} />
+      <Route path="/shop" element={<Private ownerOnly><ShopSettings /></Private>} />
+      <Route path="/sales/orders" element={<Private module="sales"><Orders /></Private>} />
       <Route path="/" element={<Private><Dashboard /></Private>} />
       <Route path="/sales" element={<Navigate to="/sales/leads" replace />} />
       <Route path="/sales/leads" element={<Private module="sales"><Leads /></Private>} />

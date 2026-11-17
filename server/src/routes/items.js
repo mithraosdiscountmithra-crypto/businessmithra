@@ -19,6 +19,12 @@ const schema = z.object({
   price: z.coerce.number().min(0, 'Price cannot be negative'),
   taxRate: z.coerce.number().refine((v) => GST_RATES.includes(v), 'Choose a valid GST %'),
   active: z.boolean().default(true),
+  mrp: z.coerce.number().min(0).optional().nullable().or(z.literal('')).transform((v) => (v === '' || v === null || v === undefined || v === 0 ? null : v)),
+  description: s(1000),
+  category: s(60),
+  images: z.array(z.string().trim().url().refine((v) => v.startsWith('https://'), 'Image link must start with https://')).max(6).default([]),
+  showInShop: z.boolean().default(true),
+  inStock: z.boolean().default(true),
 });
 
 router.get('/', requirePermission('sales', 'view'), h(async (req, res) => {

@@ -60,6 +60,7 @@ export function SubNav({ items }) {
 }
 
 export const SALES_NAV = [
+  { to: '/sales/orders', label: 'Online Orders' },
   { to: '/sales/leads', label: 'Leads Pipeline' },
   { to: '/sales/customers', label: 'Customers' },
   { to: '/sales/followups', label: 'Follow-ups' },

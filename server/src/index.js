@@ -20,6 +20,8 @@ import publicRoutes from './routes/public.js';
 import dashboardRoutes from './routes/dashboard.js';
 import salesReportRoutes from './routes/salesReports.js';
 import accountsRoutes from './routes/accounts.js';
+import shopRoutes from './routes/shop.js';
+import shopAdminRoutes from './routes/shopAdmin.js';
 import { Prisma } from '@prisma/client';
 
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
@@ -39,9 +41,9 @@ app.use(
         defaultSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
         fontSrc: ["'self'", 'https://fonts.gstatic.com'],
-        imgSrc: ["'self'", 'data:'],
+        imgSrc: ["'self'", 'data:', 'https:'],
         scriptSrc: ["'self'"],
-        connectSrc: ["'self'"],
+        connectSrc: ["'self'", 'https://api.cloudinary.com'],
       },
     },
   })
@@ -79,6 +81,8 @@ app.use('/api/public', publicRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/reports/sales', salesReportRoutes);
 app.use('/api/finance', accountsRoutes);
+app.use('/api/shop', shopRoutes);
+app.use('/api/shop-admin', shopAdminRoutes);
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
 
 // The same server also serves the built web app (one Render service, one URL).
