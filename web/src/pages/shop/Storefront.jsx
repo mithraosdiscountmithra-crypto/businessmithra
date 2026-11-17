@@ -4,7 +4,7 @@ import { api } from '../../api.js';
 import { fmtDate, fmtDateTime, inr } from '../../lib/format.js';
 import UpiPay from '../../components/UpiPay.jsx';
 import { hostShop } from '../../lib/hostShop.js';
-import { InstallButton } from '../../lib/install.js';
+import { InstallButton } from '../../lib/install.jsx';
 import { addOrderToken, clearMe, getMe, getOrderTokens, getShopToken, setMe, setShopToken } from '../../lib/shopDevice.js';
 
 const CART_KEY = (slug) => `bm_cart_${slug}`;

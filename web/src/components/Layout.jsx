@@ -3,7 +3,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
 import { MODULE_INFO, MODULE_ORDER } from '../constants.js';
 import Icon from './Icon.jsx';
-import { InstallButton } from '../lib/install.js';
+import { InstallButton } from '../lib/install.jsx';
 import { lang, setLang, t } from '../lib/i18n.js';
 
 const linkClass = ({ isActive }) =>
