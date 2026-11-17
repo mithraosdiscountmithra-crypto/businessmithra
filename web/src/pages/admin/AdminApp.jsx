@@ -135,6 +135,108 @@ function Businesses() {
   );
 }
 
+function DomainBox({ b, reload, act }) {
+  const cfg = useApi('/admin/domain-config');
+  const [domain, setDomain] = useState((b.customDomain || '').replace(/^www\./, ''));
+  const [provider, setProvider] = useState('hostinger');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  const [check, setCheck] = useState('');
+  const [err, setErr] = useState('');
+
+  useEffect(() => {
+    if (b.customDomainStatus !== 'requested' || !b.customDomain) return undefined;
+    let n = 0;
+    const t = setInterval(async () => {
+      n += 1;
+      try {
+        const r = await api(`/admin/businesses/${b.id}/domain/check`, { method: 'POST' });
+        setCheck(r.verified ? '✅ Verified – LIVE' : `⏳ ${r.status}`);
+        if (r.verified) { clearInterval(t); reload(); }
+      } catch { /* keep trying */ }
+      if (n >= 40) clearInterval(t);
+    }, 30000);
+    return () => clearInterval(t);
+  }, [b.id, b.customDomain, b.customDomainStatus, reload]);
+
+  const run = async () => {
+    setErr('');
+    setResult(null);
+    setBusy(true);
+    try {
+      const r = await api(`/admin/businesses/${b.id}/domain/auto`, { method: 'POST', body: { domain, provider } });
+      setResult(r);
+      reload();
+    } catch (x) {
+      setErr(x.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const checkNow = async () => {
+    setCheck('Checking…');
+    try {
+      const r = await api(`/admin/businesses/${b.id}/domain/check`, { method: 'POST' });
+      setCheck(r.verified ? '✅ Verified – LIVE' : `⏳ ${r.status}`);
+      if (r.verified) reload();
+    } catch (x) {
+      setCheck(x.message);
+    }
+  };
+  const c = cfg.data;
+
+  return (
+    <section className="card p-5 flex flex-col gap-3 text-sm lg:col-span-1">
+      <h2 className="font-bold">🌐 Own domain · 🤖 Auto Connect</h2>
+      {b.customDomain && (
+        <p><strong>{b.customDomain}</strong> · <span className={b.customDomainStatus === 'live' ? 'text-green-800 font-bold' : 'text-amber-800 font-bold'}>{b.customDomainStatus === 'live' ? 'LIVE' : 'connecting…'}</span></p>
+      )}
+      {b.customDomainStatus === 'live' ? (
+        <div className="flex flex-wrap gap-2">
+          <a className="btn-ghost h-9 px-3" href={`https://${b.customDomain}`} target="_blank" rel="noreferrer">Open site</a>
+          <button type="button" className="btn-ghost h-9 px-3 text-red-700" onClick={() => act({ action: 'domain_remove' }, 'Remove this domain from the shop and server?')}>Remove</button>
+        </div>
+      ) : (
+        <>
+          {c && (!c.render || (provider === 'hostinger' && !c.hostinger)) && (
+            <p className="text-xs bg-amber-50 rounded-lg p-2">
+              One-time setup: Render → Environment lo {!c.render && <code>RENDER_API_KEY</code>}{!c.render && provider === 'hostinger' && !c.hostinger && ' + '}{provider === 'hostinger' && !c.hostinger && <code>HOSTINGER_API_TOKEN</code>} add cheyyandi.
+            </p>
+          )}
+          <label className="label mb-0" htmlFor="ad-dom">Domain (meeru konnadi)</label>
+          <input id="ad-dom" className="input" value={domain} onChange={(e) => setDomain(e.target.value.toLowerCase())} placeholder="srisaitextiles.in" />
+          <label className="label mb-0" htmlFor="ad-prov">Domain ekkada konnaru?</label>
+          <select id="ad-prov" className="input" value={provider} onChange={(e) => setProvider(e.target.value)}>
+            <option value="hostinger">Hostinger (DNS automatic)</option>
+            <option value="other">Other (GoDaddy, BigRock… – DNS manual)</option>
+          </select>
+          <button type="button" className="btn-primary" disabled={busy || !domain} onClick={run}>{busy ? '🤖 Connecting…' : '🤖 Connect automatically'}</button>
+          {err && <p className="error-box">{err}</p>}
+          {result && (
+            <ul className="flex flex-col gap-1">
+              {result.steps.map((s2, i) => <li key={i} className={s2.ok ? 'text-green-800' : 'text-red-700'}>{s2.ok ? '✓' : '✗'} {s2.label}{s2.info ? ` – ${s2.info}` : ''}</li>)}
+            </ul>
+          )}
+          {(provider === 'other' || result?.steps?.some((x) => !x.ok)) && (
+            <div className="text-xs bg-gray-50 rounded-lg p-2">
+              <p className="font-bold mb-1">DNS records (domain company lo pettandi):</p>
+              <p>A · <code>@</code> → <code>216.24.57.1</code></p>
+              <p>CNAME · <code>www</code> → <code>{c?.target || 'service.onrender.com'}</code></p>
+              <p>AAAA records unte delete cheyyandi.</p>
+            </div>
+          )}
+          {b.customDomain && (
+            <div className="flex items-center gap-2">
+              <button type="button" className="btn-ghost h-9 px-3" onClick={checkNow}>Check status</button>
+              <span className="text-xs">{check || 'Prati 30 sec ki automatic ga check chestundi'}</span>
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
 function BusinessDetail() {
   const { id } = useParams();
   const { data, error, reload } = useApi(`/admin/businesses/${id}`);
@@ -194,27 +296,7 @@ function BusinessDetail() {
           <p>{b._count.customers} customers · {b._count.invoices} invoices · {b._count.orders} online orders · {b._count.items} items · {b._count.leads} leads · {b._count.expenses} expenses</p>
           <p>Staff: {b.users.length} · Modules ON: {b.modules.filter((m) => m.enabled).map((m) => MODULE_INFO[m.module]?.label || m.module).join(', ')}</p>
         </section>
-        <section className="card p-5 flex flex-col gap-2 text-sm">
-          <h2 className="font-bold">🌐 Own domain</h2>
-          {b.customDomain ? (
-            <>
-              <p><strong>{b.customDomain}</strong> · <span className={b.customDomainStatus === 'live' ? 'text-green-800 font-bold' : 'text-amber-800 font-bold'}>{b.customDomainStatus}</span></p>
-              {b.customDomainStatus !== 'live' && (
-                <ol className="list-decimal pl-5 text-xs text-gray-700">
-                  <li>Render → businessmithra → Settings → Custom Domains → Add <strong>{b.customDomain}</strong></li>
-                  <li>Vendor DNS lo CNAME www → service onrender address undaa check</li>
-                  <li>Render lo "Verified" + certificate vachaka kinda "Mark live"</li>
-                </ol>
-              )}
-              <div className="flex flex-wrap gap-2">
-                {b.customDomainStatus !== 'live'
-                  ? <button type="button" className="btn-primary h-9 px-3" onClick={() => act({ action: 'domain_live' })}>Mark live</button>
-                  : <a className="btn-ghost h-9 px-3" href={`https://${b.customDomain}`} target="_blank" rel="noreferrer">Open</a>}
-                <button type="button" className="btn-ghost h-9 px-3 text-red-700" onClick={() => act({ action: 'domain_remove' }, 'Remove this domain?')}>Remove</button>
-              </div>
-            </>
-          ) : <p className="text-muted">Ledu</p>}
-        </section>
+        <DomainBox b={b} reload={reload} act={act} />
         <section className="card p-5 flex flex-col gap-2">
           <h2 className="font-bold">Private note</h2>
           <textarea aria-label="Private note" rows={4} className="input h-auto py-2.5" value={note ?? b.adminNote ?? ''} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Called on 12 Nov, will pay next week" />

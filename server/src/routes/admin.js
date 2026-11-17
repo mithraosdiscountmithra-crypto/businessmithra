@@ -10,7 +10,8 @@ import { num, r2 } from '../lib/money.js';
 import { accessState, addPeriod, clearPlanCache, getPlans } from '../lib/plans.js';
 import { MODULES } from '../lib/constants.js';
 import { HttpError } from '../middleware/auth.js';
-import { clearDomainCache } from '../lib/domains.js';
+import { clearDomainCache, normalizeDomain } from '../lib/domains.js';
+import { addRenderDomain, autoDomainConfig, removeRenderDomain, setHostingerDns, verifyRenderDomain } from '../lib/autoDomain.js';
 
 const router = Router();
 const COOKIE = 'bm_admin';
@@ -173,10 +174,70 @@ router.post('/businesses/:id', h(async (req, res) => {
   }
   if (d.action === 'domain_live') data = { customDomainStatus: 'live' };
   if (d.action === 'domain_pending') data = { customDomainStatus: 'requested' };
-  if (d.action === 'domain_remove') data = { customDomain: null, customDomainStatus: null };
+  if (d.action === 'domain_remove') {
+    if (b.customDomain) await removeRenderDomain(b.customDomain).catch(() => {});
+    data = { customDomain: null, customDomainStatus: null };
+  }
   await prisma.business.update({ where: { id: b.id }, data });
   clearDomainCache();
   res.json({ ok: true });
+}));
+
+// ── 🤖 One-click own-domain setup ──
+router.get('/domain-config', (_req, res) => res.json(autoDomainConfig()));
+
+router.post('/businesses/:id/domain/auto', h(async (req, res) => {
+  const b = await prisma.business.findUnique({ where: { id: req.params.id } });
+  if (!b) throw new HttpError(404, 'Business not found');
+  const root = normalizeDomain(req.body?.domain || b.customDomain);
+  if (!/^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/.test(root)) throw new HttpError(400, 'Enter a valid domain like srisaitextiles.in');
+  const host = `www.${root}`;
+  const dup = await prisma.business.findFirst({ where: { customDomain: host, NOT: { id: b.id } } });
+  if (dup) throw new HttpError(409, `This domain is already used by ${dup.name}`);
+  if (!b.shopEnabled) throw new HttpError(400, 'Turn ON this business\'s Online Shop first');
+
+  const steps = [];
+  const step = async (label, fn) => {
+    try {
+      const out = await fn();
+      steps.push({ label, ok: true, info: out || null });
+      return true;
+    } catch (e) {
+      steps.push({ label, ok: false, info: e.message });
+      return false;
+    }
+  };
+
+  await prisma.business.update({ where: { id: b.id }, data: { customDomain: host, customDomainStatus: 'requested' } });
+  steps.push({ label: `Domain saved: ${host}`, ok: true });
+  if (req.body?.provider === 'hostinger') {
+    await step('Hostinger DNS records set (A @ + CNAME www)', () => setHostingerDns(root));
+  } else {
+    steps.push({ label: 'DNS: manual (other provider) – see records below', ok: true });
+  }
+  const added = await step('Domain added on Render server', () => addRenderDomain(host));
+  let verified = false;
+  if (added) {
+    await step('Verification started', async () => {
+      const v = await verifyRenderDomain(host);
+      verified = v.verified;
+      return v.verified ? 'Verified ✓' : `Status: ${v.status} (DNS takes 5–60 min)`;
+    });
+  }
+  if (verified) await prisma.business.update({ where: { id: b.id }, data: { customDomainStatus: 'live' } });
+  clearDomainCache();
+  res.json({ steps, verified, host, dns: [{ type: 'A', name: '@', value: '216.24.57.1' }, { type: 'CNAME', name: 'www', value: autoDomainConfig().target }] });
+}));
+
+router.post('/businesses/:id/domain/check', h(async (req, res) => {
+  const b = await prisma.business.findUnique({ where: { id: req.params.id } });
+  if (!b?.customDomain) throw new HttpError(400, 'No domain on this business');
+  const v = await verifyRenderDomain(b.customDomain).catch((e) => ({ verified: false, status: e.message }));
+  if (v.verified && b.customDomainStatus !== 'live') {
+    await prisma.business.update({ where: { id: b.id }, data: { customDomainStatus: 'live' } });
+    clearDomainCache();
+  }
+  res.json(v);
 }));
 
 // ── Plan requests (vendor paid cash / UPI / bank) ──
