@@ -61,6 +61,23 @@ export default function QuickBill() {
     api('/invoices/wa-config').then((r) => setAutoSend(r.autoSend)).catch(() => {});
   }, []);
 
+  // ⭐ Member? Turn on their discount automatically.
+  const [member, setMember] = useState(null);
+  useEffect(() => {
+    setMember(null);
+    if (!/^[6-9]\d{9}$/.test(phone)) return;
+    let alive = true;
+    api(`/memberships/check?phone=${phone}`).then((r) => {
+      if (!alive || !r.benefits) return;
+      setMember(r.benefits);
+      if (r.benefits.discountPct > 0) {
+        setDiscOn(true);
+        setDiscountPct(String(r.benefits.discountPct));
+      }
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [phone]);
+
   const sendDirect = async (invoice) => {
     setSendState('sending');
     setPdfMsg('');
@@ -251,6 +268,11 @@ export default function QuickBill() {
               <input id="q-phone" required inputMode="numeric" maxLength={10} className="flex-1 h-11 px-2 outline-none text-[15px]" value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))} />
             </div>
           </div>
+          {member && (
+            <p className="sm:col-span-2 text-sm font-bold text-amber-900 bg-amber-50 rounded-xl p-3 order-last">
+              ⭐ {member.planName} member{member.discountPct ? ` · ${member.discountPct}% discount apply chesamu` : ''}{member.freeDelivery ? ' · free delivery' : ''}
+            </p>
+          )}
           <div>
             <label className="label" htmlFor="q-name">Customer name (optional)</label>
             <input id="q-name" className="input" value={name} onChange={(e) => setName(e.target.value)} />

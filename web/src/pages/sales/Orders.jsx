@@ -130,6 +130,7 @@ export default function Orders() {
                   );
                 })()}
                 {o.note && <p className="text-sm"><strong>Note:</strong> {o.note}</p>}
+                {o.memberNote && <p className="text-sm font-bold text-amber-900">⭐ {o.memberNote}</p>}
                 <div className="flex flex-wrap gap-2">
                   {can.edit && nxt && <button type="button" className="btn-primary h-10 px-4" onClick={() => setStatus(o, nxt[0])}>{nxt[1]}</button>}
                   <a className="btn h-10 px-4 bg-green-100 text-green-800" target="_blank" rel="noreferrer" href={waLink(o.phone, o.kind === 'table' ? `Namaste ${o.name} garu, mee table booking ${o.number} (${o.guests} people, ${fmtDateTime(o.preferredAt)}) ${o.status === 'confirmed' ? 'confirm ayyindi ✅' : 'maaku andindi'}.\n\nDhanyavaadalu – ${me.business.name}` : `Namaste ${o.name} garu, mee ${o.kind === 'booking' ? 'booking' : 'order'} ${o.number} ${o.status === 'new' ? 'maaku andindi' : `status: ${STATUS[o.status][0]}`}.\n${lines}\nTotal: ${inr(o.total)}\n\nDhanyavaadalu – ${me.business.name}`)}>WhatsApp</a>

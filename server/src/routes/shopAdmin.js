@@ -127,14 +127,14 @@ router.put('/orders/:id/status', requirePermission('sales', 'edit'), h(async (re
 async function makeInvoice(tx, req, o, payment) {
   const items = o.items.map((i) => ({ itemId: i.itemId, name: i.name, hsn: i.hsn, unit: i.unit, qty: num(i.qty), rate: num(i.rate), taxRate: num(i.taxRate) }));
   if (num(o.deliveryFee) > 0) items.push({ name: 'Delivery charges', qty: 1, rate: num(o.deliveryFee), taxRate: 0 });
-  const c = computeDoc({ items, discount: 0, interState: false });
+  const c = computeDoc({ items, discount: num(o.discount), interState: false });
   const b = await tx.business.update({ where: { id: req.businessId }, data: { nextInvoiceNo: { increment: 1 } } });
   const inv = await tx.invoice.create({
     data: {
       businessId: req.businessId, number: `${b.invoicePrefix}${b.nextInvoiceNo - 1}`, customerId: o.customerId,
       date: dateOnly(istToday()), interState: false,
-      subtotal: c.subtotal, discount: 0, taxTotal: c.taxTotal, cgst: c.cgst, sgst: c.sgst, igst: c.igst, roundOff: c.roundOff, total: c.total,
-      notes: `Online ${o.kind} ${o.number}`, shareToken: crypto.randomBytes(16).toString('hex'), createdById: req.user.id,
+      subtotal: c.subtotal, discount: c.discount, taxTotal: c.taxTotal, cgst: c.cgst, sgst: c.sgst, igst: c.igst, roundOff: c.roundOff, total: c.total,
+      notes: `Online ${o.kind} ${o.number}${o.memberNote ? ` · ${o.memberNote}` : ''}`, shareToken: crypto.randomBytes(16).toString('hex'), createdById: req.user.id,
       items: { create: c.lines },
     },
   });

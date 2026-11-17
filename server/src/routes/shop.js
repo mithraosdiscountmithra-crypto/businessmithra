@@ -9,6 +9,7 @@ import { computeDoc, num, r2 } from '../lib/money.js';
 import { HttpError } from '../middleware/auth.js';
 import { otpEnabled, sendOtp, shopPhone, verifyOtp } from '../lib/otp.js';
 import { accessState, getPlans } from '../lib/plans.js';
+import { activeBenefits } from '../lib/membership.js';
 
 const router = Router();
 
@@ -44,8 +45,12 @@ router.get('/:slug', h(async (req, res) => {
     orderBy: [{ category: 'asc' }, { name: 'asc' }],
     take: 1000,
   });
+  const memberPlans = b.membershipsEnabled
+    ? await prisma.membershipPlan.findMany({ where: { businessId: b.id, active: true }, orderBy: { price: 'asc' } })
+    : [];
   res.json({
     shop: publicBusiness(b),
+    memberPlans: memberPlans.map((p) => ({ id: p.id, name: p.name, price: num(p.price), durationDays: p.durationDays, discountPct: num(p.discountPct), freeDelivery: p.freeDelivery, description: p.description })),
     items: items.map((it) => ({
       id: it.id, name: it.name, type: it.type, unit: it.unit, description: it.description, category: it.category,
       images: it.images, inStock: it.inStock, price: priceWithTax(it), mrp: it.mrp ? num(it.mrp) : null,
@@ -121,10 +126,18 @@ router.post('/:slug/orders', writeLimiter, h(async (req, res) => {
     }
     return { itemId: it.id, name: it.name, hsn: it.hsn, unit: it.unit, qty: l.qty, rate: num(it.price), taxRate: num(it.taxRate) };
   });
-  const c = computeDoc({ items: lines, discount: 0, interState: false });
-  const itemsTotal = r2(c.subtotal + c.taxTotal);
+  // Member benefits only for a mobile verified by OTP.
+  const verifiedPhone = shopPhone(req);
+  const benefits = b.membershipsEnabled && verifiedPhone && verifiedPhone === d.phone ? await activeBenefits(b.id, d.phone) : null;
+  const gross = lines.reduce((a, l) => a + l.qty * l.rate, 0);
+  const memberDiscount = benefits?.discountPct ? r2((gross * benefits.discountPct) / 100) : 0;
+  const c = computeDoc({ items: lines, discount: memberDiscount, interState: false });
+  const itemsTotal = r2(c.subtotal - c.discount + c.taxTotal);
   if (d.kind === 'order' && num(b.minOrder) > 0 && itemsTotal < num(b.minOrder)) throw new HttpError(400, `Minimum order is ₹${num(b.minOrder)}`);
-  const deliveryFee = d.kind === 'order' && d.fulfilment === 'delivery' ? num(b.deliveryFee) : 0;
+  const deliveryFee = d.kind === 'order' && d.fulfilment === 'delivery' && !benefits?.freeDelivery ? num(b.deliveryFee) : 0;
+  const memberNote = benefits && (memberDiscount > 0 || (benefits.freeDelivery && d.fulfilment === 'delivery'))
+    ? `${benefits.planName} member${benefits.discountPct ? ` · ${benefits.discountPct}% off` : ''}${benefits.freeDelivery && d.fulfilment === 'delivery' ? ' · free delivery' : ''}`
+    : null;
   const total = Math.round(itemsTotal + deliveryFee);
 
   if (d.address && d.landmark) d.address = `${d.address} (Landmark: ${d.landmark})`;
@@ -143,7 +156,7 @@ router.post('/:slug/orders', writeLimiter, h(async (req, res) => {
         lat: d.fulfilment === 'delivery' ? d.lat ?? null : null,
         lng: d.fulfilment === 'delivery' ? d.lng ?? null : null,
         preferredAt: d.preferredAt,
-        subtotal: c.subtotal, taxTotal: c.taxTotal, deliveryFee, total,
+        subtotal: c.subtotal, discount: c.discount, memberNote, taxTotal: c.taxTotal, deliveryFee, total,
         items: { create: c.lines.map(({ sort, ...l }) => l) },
       },
     });
@@ -226,6 +239,37 @@ router.delete('/me/addresses/:id', h(async (req, res) => {
   res.json({ ok: true });
 }));
 
+// Customer's membership at this shop (OTP login).
+router.get('/:slug/me', h(async (req, res) => {
+  const b = await loadShop(req.params.slug);
+  const p = shopPhone(req);
+  if (!p) return res.json({ benefits: null, pending: [] });
+  const [benefits, pending] = await Promise.all([
+    activeBenefits(b.id, p),
+    prisma.membership.findMany({ where: { businessId: b.id, phone: p, status: 'pending' }, include: { plan: { select: { name: true, price: true } } } }),
+  ]);
+  res.json({ benefits, pending: pending.map((m) => ({ id: m.id, plan: m.plan.name, price: num(m.plan.price), createdAt: m.createdAt })) });
+}));
+
+router.post('/:slug/membership', writeLimiter, h(async (req, res) => {
+  const b = await loadShop(req.params.slug);
+  if (!b.membershipsEnabled) throw new HttpError(400, 'Memberships are not available');
+  const p = shopPhone(req);
+  if (!p) throw new HttpError(401, 'Please login with OTP first');
+  const plan = await prisma.membershipPlan.findFirst({ where: { id: String(req.body?.planId || ''), businessId: b.id, active: true } });
+  if (!plan) throw new HttpError(400, 'Plan not found');
+  const name = String(req.body?.name || '').trim().slice(0, 80);
+  const customer = await prisma.customer.findFirst({ where: { businessId: b.id, phone: p } })
+    || await prisma.customer.create({ data: { businessId: b.id, name: name || `Customer ${p.slice(-4)}`, phone: p, tags: ['Online'] } });
+  const existing = await prisma.membership.findFirst({ where: { businessId: b.id, phone: p, planId: plan.id, status: 'pending' } });
+  const m = existing || await prisma.membership.create({ data: { businessId: b.id, planId: plan.id, customerId: customer.id, phone: p, source: 'shop' } });
+  await logActivity(b.id, null, 'membership_request', 'membership', m.id);
+  const upiLink = b.upiId && num(plan.price) > 0
+    ? `upi://pay?pa=${encodeURIComponent(b.upiId)}&pn=${encodeURIComponent(b.name)}&am=${num(plan.price).toFixed(2)}&cu=INR&tn=${encodeURIComponent(`${plan.name} membership`)}`
+    : null;
+  res.status(201).json({ ok: true, upiLink, upiId: upiLink ? b.upiId : null, price: num(plan.price) });
+}));
+
 const enquirySchema = z.object({
   name: z.string().trim().min(2, 'Enter your name').max(80),
   phone,
@@ -262,7 +306,7 @@ router.get('/order/:token', h(async (req, res) => {
   res.json({
     order: {
       number: o.number, kind: o.kind, guests: o.guests, status: o.status, name: o.name, phone: o.phone, address: o.address, note: o.note,
-      fulfilment: o.fulfilment, preferredAt: o.preferredAt, subtotal: o.subtotal, taxTotal: o.taxTotal, deliveryFee: o.deliveryFee,
+      fulfilment: o.fulfilment, preferredAt: o.preferredAt, subtotal: o.subtotal, discount: o.discount, memberNote: o.memberNote, taxTotal: o.taxTotal, deliveryFee: o.deliveryFee,
       total: o.total, paymentStatus: o.paymentStatus, createdAt: o.createdAt,
       items: o.items.map((i) => ({ name: i.name, qty: i.qty, unit: i.unit, lineTotal: r2(num(i.amount) + num(i.taxAmount)) })),
     },

@@ -67,6 +67,12 @@ export default function DocEditor({ kind }) {
   }, [id, base]);
 
   const t = useMemo(() => calc(lines, f.discount, f.interState), [lines, f.discount, f.interState]);
+  const [member, setMember] = useState(null);
+  useEffect(() => {
+    setMember(null);
+    if (!f.customerId) return;
+    api(`/memberships/check?customerId=${f.customerId}`).then((r) => setMember(r.benefits)).catch(() => {});
+  }, [f.customerId]);
   const customer = (customers.data?.customers || []).find((c) => c.id === f.customerId);
 
   const setLine = (key, patch) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
@@ -199,6 +205,11 @@ export default function DocEditor({ kind }) {
         </section>
         <section className="card p-5 flex flex-col gap-2 text-sm">
           <div className="flex justify-between"><span>Subtotal</span><span className="font-semibold">{inrExact(t.subtotal)}</span></div>
+          {member?.discountPct > 0 && (
+            <button type="button" className="text-left text-sm font-bold text-amber-900 bg-amber-50 rounded-lg px-3 py-2" onClick={() => setF({ ...f, discount: Math.round(t.subtotal * member.discountPct) / 100 })}>
+              ⭐ {member.planName} member – {member.discountPct}% discount apply cheyyandi
+            </button>
+          )}
           <div className="flex justify-between items-center gap-3">
             <label htmlFor="d-disc">Discount (₹)</label>
             <input id="d-disc" type="number" min="0" step="0.01" className="input h-9 w-32 text-right" value={f.discount} onChange={(e) => setF({ ...f, discount: e.target.value })} />

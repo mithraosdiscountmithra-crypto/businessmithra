@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../api.js';
-import { fmtDateTime, inr } from '../../lib/format.js';
+import { fmtDate, fmtDateTime, inr } from '../../lib/format.js';
+import UpiPay from '../../components/UpiPay.jsx';
 import { addOrderToken, clearMe, getMe, getOrderTokens, getShopToken, setMe, setShopToken } from '../../lib/shopDevice.js';
 
 const CART_KEY = (slug) => `bm_cart_${slug}`;
@@ -129,6 +130,10 @@ export default function Storefront() {
   const [landmark, setLandmark] = useState(saved?.landmark || '');
   const [addrLabel, setAddrLabel] = useState('Home');
   const [saveAddr, setSaveAddr] = useState(true);
+  const [benefits, setBenefits] = useState(null);
+  const [memberPending, setMemberPending] = useState([]);
+  const [joinPlan, setJoinPlan] = useState(null);
+  const [joinResult, setJoinResult] = useState(null);
   const [otp, setOtp] = useState('');
   const [busy, setBusy] = useState(false);
   const [formErr, setFormErr] = useState('');
@@ -145,6 +150,22 @@ export default function Storefront() {
   }, [slug]);
 
   useEffect(() => saveCart(slug, cart), [slug, cart]);
+
+  const loadMember = async () => {
+    const t = getShopToken();
+    if (!t) { setBenefits(null); return; }
+    try {
+      const r = await api(`/shop/${slug}/me`, { headers: { Authorization: `Bearer ${t}` } });
+      setBenefits(r.benefits);
+      setMemberPending(r.pending);
+    } catch {
+      /* ignore */
+    }
+  };
+  useEffect(() => {
+    if (data?.memberPlans?.length) loadMember();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
 
   const shop = data?.shop;
   const color = shop?.color || '#3730A3';
@@ -163,7 +184,9 @@ export default function Storefront() {
   });
   const cartCount = cartLines.reduce((a, l) => a + l.qty, 0);
   const itemsTotal = cartLines.reduce((a, l) => a + l.price * l.qty, 0);
-  const fee = form.fulfilment === 'delivery' ? shop?.deliveryFee || 0 : 0;
+  const memberOk = Boolean(benefits && getShopToken() && me?.phone === form.phone.trim());
+  const fee = form.fulfilment === 'delivery' && !(memberOk && benefits.freeDelivery) ? shop?.deliveryFee || 0 : 0;
+  const memberDisc = memberOk && benefits.discountPct ? Math.round(itemsTotal * benefits.discountPct) / 100 : 0;
 
   const add = (id) => setCart((c) => ({ ...c, [id]: (c[id] || 0) + 1 }));
   const dec = (id) => setCart((c) => ({ ...c, [id]: Math.max(0, (c[id] || 0) - 1) }));
@@ -209,6 +232,7 @@ export default function Storefront() {
     setShopToken(r.token);
     await finishHello();
     setOtpStep(false);
+    loadMember();
     return true;
   };
 
@@ -332,6 +356,22 @@ export default function Storefront() {
     }
   };
 
+  const joinMembership = async (e) => {
+    e.preventDefault();
+    setFormErr('');
+    setBusy(true);
+    try {
+      if (!(await ensureLogin())) return;
+      const r = await api(`/shop/${slug}/membership`, { method: 'POST', body: { planId: joinPlan.id, name: form.name }, headers: authHeaders() });
+      setJoinResult(r);
+      loadMember();
+    } catch (x) {
+      setFormErr(x.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (err) return <div className="min-h-screen flex items-center justify-center p-6 text-center"><div><p className="text-xl font-bold">Shop not found</p><p className="text-muted mt-1">Ee link lo shop ledu leda temporary ga close ayyindi.</p></div></div>;
   if (!data) return <div className="min-h-screen flex items-center justify-center text-muted">Loading shop…</div>;
 
@@ -388,6 +428,11 @@ export default function Storefront() {
               target="_blank" rel="noreferrer" className="h-10 px-4 rounded-xl bg-white border border-gray-300 font-bold flex items-center"
             >📍 Directions</a>
           )}
+          {data.memberPlans?.length > 0 && (
+            <button type="button" onClick={() => { setFormErr(''); setJoinPlan(null); setJoinResult(null); setSheet('member'); }} className="h-10 px-4 rounded-xl font-bold border-2" style={{ borderColor: '#F59E0B', background: benefits ? '#FEF3C7' : '#fff', color: '#92400E' }}>
+              {benefits ? `⭐ ${benefits.planName}` : '⭐ Membership'}
+            </button>
+          )}
           {shop.allowTable && <button type="button" onClick={() => { setFormErr(''); setSheet('table'); }} className="h-10 px-4 rounded-xl text-white font-bold" style={{ background: color }}>🍽️ Book a table</button>}
           <button type="button" onClick={() => { setSent(false); setSheet({ type: 'ask' }); }} className="h-10 px-4 rounded-xl bg-white border border-gray-300 font-bold">Ask a question</button>
           {(me || getOrderTokens(slug).length > 0) && <button type="button" onClick={openMyOrders} className="h-10 px-4 rounded-xl bg-white border border-gray-300 font-bold">My Orders</button>}
@@ -396,6 +441,11 @@ export default function Storefront() {
           <p className="max-w-5xl mx-auto px-4 pt-2 text-xs text-gray-600">
             Namaste <strong>{me.name}</strong> ({me.phone}) ·{' '}
             <button type="button" className="underline font-semibold" onClick={() => { clearMe(); setShopToken(null); setMeState(null); setOtpStep(false); setForm((f) => ({ ...f, name: '', phone: '' })); }}>Not you?</button>
+          </p>
+        )}
+        {benefits && (
+          <p className="max-w-5xl mx-auto px-4 pt-2 text-sm font-semibold text-amber-900">
+            ⭐ Meeru {benefits.planName} member · {[benefits.discountPct ? `${benefits.discountPct}% off` : null, benefits.freeDelivery ? 'free delivery' : null].filter(Boolean).join(' + ')} · {fmtDate(benefits.endsAt)} varaku
           </p>
         )}
         <div className="max-w-5xl mx-auto px-4 pt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
@@ -554,8 +604,10 @@ export default function Storefront() {
             <div><label className="label" htmlFor="s-note">Note (optional)</label><input id="s-note" className="input" value={form.note} onChange={setF('note')} placeholder="Size, colour, timing…" /></div>
             <div className="text-sm flex flex-col gap-1 bg-gray-50 rounded-xl p-3">
               <div className="flex justify-between"><span>Items</span><span>{inr(itemsTotal)}</span></div>
+              {memberDisc > 0 && <div className="flex justify-between text-green-800 font-semibold"><span>⭐ {benefits.planName} ({benefits.discountPct}% off)</span><span>− {inr(memberDisc)}</span></div>}
               {fee > 0 && <div className="flex justify-between"><span>Delivery</span><span>{inr(fee)}</span></div>}
-              <div className="flex justify-between text-base font-extrabold pt-1"><span>Total</span><span>{inr(Math.round(itemsTotal + fee))}</span></div>
+              {memberOk && benefits.freeDelivery && form.fulfilment === 'delivery' && <div className="flex justify-between text-green-800 font-semibold"><span>⭐ Delivery</span><span>FREE</span></div>}
+              <div className="flex justify-between text-base font-extrabold pt-1"><span>Total</span><span>{inr(Math.round(itemsTotal - memberDisc + fee))}</span></div>
             </div>
             {shop.minOrder > 0 && itemsTotal < shop.minOrder && <p className="text-sm font-semibold text-orange-800">Minimum order {inr(shop.minOrder)}. Inka {inr(shop.minOrder - itemsTotal)} add cheyyandi.</p>}
             {formErr && <p className="error-box" role="alert">{formErr}</p>}
@@ -599,6 +651,47 @@ export default function Storefront() {
                 </li>
               ))}
             </ul>
+          )}
+        </Sheet>
+      )}
+
+      {sheet === 'member' && (
+        <Sheet title="⭐ Membership plans" onClose={() => { setSheet(null); setOtpStep(false); }}>
+          {joinResult ? (
+            <div className="flex flex-col gap-3 text-center">
+              <p className="text-lg font-extrabold">Request pampamu! 🙏</p>
+              <p className="text-sm text-gray-600">{joinResult.price > 0 ? `${inr(joinResult.price)} pay cheyyandi. Shop vaallu payment chusi membership activate chestaru.` : 'Shop vaallu activate chestaru.'}</p>
+              {joinResult.upiLink && <UpiPay upiLink={joinResult.upiLink} upiId={joinResult.upiId} amountLabel={inr(joinResult.price)} color={color} />}
+              {!joinResult.upiLink && <p className="text-sm">Shop lo cash / UPI tho pay cheyyandi.</p>}
+              <button type="button" className="btn-ghost" onClick={() => setSheet(null)}>Close</button>
+            </div>
+          ) : joinPlan ? (
+            <form onSubmit={joinMembership} className="flex flex-col gap-4">
+              <div className="rounded-2xl p-4 border-2" style={{ borderColor: '#F59E0B', background: '#FFFBEB' }}>
+                <p className="font-extrabold text-lg">⭐ {joinPlan.name}</p>
+                <p className="text-2xl font-extrabold">{inr(joinPlan.price)} <span className="text-sm font-normal text-gray-600">/ {joinPlan.durationDays >= 365 ? `${Math.round(joinPlan.durationDays / 365)} year` : joinPlan.durationDays >= 30 ? `${Math.round(joinPlan.durationDays / 30)} month` : `${joinPlan.durationDays} days`}</span></p>
+              </div>
+              {contactAuth}
+              {formErr && <p className="error-box" role="alert">{formErr}</p>}
+              <button type="submit" disabled={busy} className="h-14 rounded-2xl text-white font-bold text-base disabled:opacity-60" style={{ background: color }}>{busy ? 'Please wait…' : cta('Join now')}</button>
+              <button type="button" className="text-sm font-semibold underline" onClick={() => setJoinPlan(null)}>← Plans</button>
+            </form>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {benefits && <p className="ok-box font-semibold">✅ Meeru already {benefits.planName} member ({fmtDate(benefits.endsAt)} varaku). Renew kooda cheyyochu.</p>}
+              {memberPending.length > 0 && <p className="text-sm font-semibold text-amber-900 bg-amber-50 rounded-xl p-3">⏳ {memberPending.map((m) => m.plan).join(', ')} request shop approval kosam waiting.</p>}
+              {data.memberPlans.map((p) => (
+                <div key={p.id} className="rounded-2xl border-2 border-gray-200 p-4 flex items-center gap-3">
+                  <div className="flex-1">
+                    <p className="font-extrabold">⭐ {p.name}</p>
+                    <p className="text-sm font-semibold text-green-800">{[p.discountPct ? `${p.discountPct}% off on every order` : null, p.freeDelivery ? 'Free home delivery' : null].filter(Boolean).join(' + ')}</p>
+                    <p className="text-xs text-gray-600">{p.durationDays >= 365 ? `${Math.round(p.durationDays / 365)} year` : p.durationDays >= 30 ? `${Math.round(p.durationDays / 30)} month(s)` : `${p.durationDays} days`} validity{p.description ? ` · ${p.description}` : ''}</p>
+                  </div>
+                  <button type="button" className="h-12 px-4 rounded-xl text-white font-bold whitespace-nowrap" style={{ background: color }} onClick={() => { setFormErr(''); setJoinPlan(p); }}>{inr(p.price)}</button>
+                </div>
+              ))}
+              <p className="text-xs text-center text-gray-500">Benefits OTP login tho order chesinappudu automatic ga apply avutayi.</p>
+            </div>
           )}
         </Sheet>
       )}

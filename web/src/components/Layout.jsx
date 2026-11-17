@@ -54,6 +54,9 @@ function Sidebar({ onNavigate }) {
           <NavLink to="/shop" className={linkClass} onClick={onNavigate}>
             <Icon name="shop" /> Online Shop
           </NavLink>
+          <NavLink to="/memberships" className={linkClass} onClick={onNavigate}>
+            <Icon name="staff" /> ⭐ Memberships
+          </NavLink>
           <NavLink to="/staff" className={linkClass} onClick={onNavigate}>
             <Icon name="staff" /> Staff & Roles
           </NavLink>

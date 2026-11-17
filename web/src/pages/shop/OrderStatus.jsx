@@ -75,6 +75,7 @@ export default function OrderStatus() {
           {o.items.map((i, k) => (
             <div key={k} className="flex justify-between gap-3"><span>{i.name} × {Number(i.qty)}</span><span className="font-semibold">{inr(i.lineTotal)}</span></div>
           ))}
+          {o.memberNote && <div className="flex justify-between text-green-800 font-semibold"><span>⭐ {o.memberNote}</span></div>}
           {Number(o.deliveryFee) > 0 && <div className="flex justify-between"><span>Delivery</span><span>{inr(o.deliveryFee)}</span></div>}
           <div className="flex justify-between text-base font-extrabold border-t border-gray-100 pt-2"><span>Total</span><span>{inr(o.total)}</span></div>
           <p className="text-xs text-muted pt-1">{o.fulfilment === 'delivery' ? `Delivery to: ${o.address}` : isBooking ? `Time: ${new Date(o.preferredAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}` : 'Takeaway / pickup'}</p>
