@@ -5,6 +5,7 @@ import { useAuth } from '../../auth.jsx';
 import { ErrorBox } from '../../components/ui.jsx';
 import Icon from '../../components/Icon.jsx';
 import { fmtDate, inrExact, MODE_LABEL } from '../../lib/format.js';
+import { downloadBillPdf, shareBillPdf } from '../../lib/billPdf.js';
 
 const GST = [5, 12, 18, 28, 3];
 const newLine = () => ({ key: Math.random().toString(36).slice(2), name: '', qty: 1, amount: '' });
@@ -50,7 +51,9 @@ export default function QuickBill() {
   const [paid, setPaid] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState(null); // { invoice, waUrl }
+  const [done, setDone] = useState(null); // { invoice, waUrl, chatUrl }
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfMsg, setPdfMsg] = useState('');
 
   const t = useMemo(() => {
     const gross = lines.map((l) => r2((Number(l.qty) || 0) * (Number(l.amount) || 0)));
@@ -81,8 +84,8 @@ export default function QuickBill() {
       const url = `${window.location.origin}/i/${r.invoice.shareToken}`;
       const text = buildMessage(r.invoice, b, url, discOn ? Number(discountPct) || 0 : 0, gstOn ? gstRate : 0);
       const waUrl = `https://wa.me/91${phone.trim()}?text=${encodeURIComponent(text)}`;
-      setDone({ invoice: r.invoice, waUrl });
-      window.location.href = waUrl; // opens WhatsApp with the bill ready to send
+      const greet = `Namaste${name ? ` ${name} garu` : ''}, ${b.name} nunchi mee bill ${r.invoice.number} – ${inrExact(r.invoice.total)}. PDF pampistunnam 🙏`;
+      setDone({ invoice: r.invoice, waUrl, chatUrl: `https://wa.me/91${phone.trim()}?text=${encodeURIComponent(greet)}` });
     } catch (x) {
       setErr(x.message);
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -108,7 +111,35 @@ export default function QuickBill() {
           <h1 className="text-xl font-extrabold">Bill {done.invoice.number} ready</h1>
           <p className="text-muted">{inrExact(done.invoice.total)} · +91 {phone}</p>
         </div>
-        <a href={done.waUrl} className="btn h-14 text-base bg-green-600 text-white hover:bg-green-700">Open WhatsApp & Send</a>
+        <button
+          type="button"
+          disabled={pdfBusy}
+          className="btn h-14 text-base bg-green-600 text-white hover:bg-green-700"
+          onClick={async () => {
+            setPdfBusy(true);
+            setPdfMsg('');
+            try {
+              const r = await shareBillPdf(done.invoice, b, { message: `${b.name} – Bill ${done.invoice.number} – ${inrExact(done.invoice.total)}` });
+              if (r === 'downloaded') setPdfMsg('PDF download ayyindi. WhatsApp lo customer chat open chesi 📎 attach → Document tho pampandi.');
+            } catch (x) {
+              setPdfMsg(x.message || 'PDF tayaru cheyyalekapoyam');
+            } finally {
+              setPdfBusy(false);
+            }
+          }}
+        >
+          {pdfBusy ? 'PDF tayaravutundi…' : '📄 Send PDF on WhatsApp'}
+        </button>
+        {pdfMsg && <p className="text-sm font-semibold text-amber-900 bg-amber-50 rounded-xl p-3">{pdfMsg}</p>}
+        <div className="text-left text-sm bg-gray-50 rounded-xl p-3 flex flex-col gap-1">
+          <p className="font-bold">Customer number phone lo save lekapothe:</p>
+          <p>1️⃣ <a href={done.chatUrl} className="font-bold text-green-800 underline">💬 Open chat</a> nokki "Namaste" message pampandi</p>
+          <p>2️⃣ Malli ikkadiki vachi <strong>📄 Send PDF</strong> → WhatsApp → paina aa chat select cheyyandi</p>
+        </div>
+        <div className="flex gap-2">
+          <button type="button" className="btn-ghost flex-1" onClick={() => downloadBillPdf(done.invoice, b)}>⬇️ Download PDF</button>
+          <a href={done.waUrl} className="btn-ghost flex-1">💬 Send as text</a>
+        </div>
         <div className="flex gap-2">
           <Link to={`/sales/invoices/${done.invoice.id}`} className="btn-ghost flex-1">View / Print bill</Link>
           <button type="button" className="btn-primary flex-1" onClick={reset}>⚡ New bill</button>
@@ -210,7 +241,7 @@ export default function QuickBill() {
           ))}
         </div>
         <button type="submit" disabled={busy || t.total <= 0} className="btn h-14 text-base bg-green-600 text-white hover:bg-green-700 disabled:opacity-50">
-          {busy ? 'Creating bill…' : `Send on WhatsApp · ${inrExact(t.total)}`}
+          {busy ? 'Creating bill…' : `Create bill · ${inrExact(t.total)}`}
         </button>
         <p className="text-xs text-muted text-center">Bill automatic ga Invoices, Customers, Accounts lo save avutundi.</p>
       </section>

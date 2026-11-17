@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api } from '../api.js';
 import InvoicePaper from '../components/InvoicePaper.jsx';
+import { downloadBillPdf } from '../lib/billPdf.js';
 
 // Page the customer opens from the WhatsApp link. No login needed.
 export default function PublicInvoice() {
@@ -20,7 +21,10 @@ export default function PublicInvoice() {
         {data && (
           <>
             <div className="flex justify-end print:hidden">
-              <button type="button" className="btn-primary" onClick={() => window.print()}>Download / Print</button>
+              <div className="flex gap-2">
+                <button type="button" className="btn-primary" onClick={() => downloadBillPdf(data.invoice, data.business).catch(() => window.print())}>⬇️ Download PDF</button>
+                <button type="button" className="btn-ghost" onClick={() => window.print()}>Print</button>
+              </div>
             </div>
             <InvoicePaper doc={data.invoice} business={data.business} kind="invoice" />
             {data.invoice.status === 'cancelled' && <p className="error-box">This invoice has been cancelled.</p>}

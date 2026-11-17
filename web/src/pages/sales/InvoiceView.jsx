@@ -5,6 +5,7 @@ import { useAuth } from '../../auth.jsx';
 import { Badge, ErrorBox, Field, Modal, invoiceDisplayStatus, useApi } from '../../components/ui.jsx';
 import InvoicePaper from '../../components/InvoicePaper.jsx';
 import { fmtDate, inr, inrExact, MODE_LABEL, today, waLink } from '../../lib/format.js';
+import { downloadBillPdf, shareBillPdf } from '../../lib/billPdf.js';
 
 function PaymentForm({ invoice, onClose, onSaved }) {
   const { me } = useAuth();
@@ -92,8 +93,10 @@ export default function InvoiceView() {
         </div>
         <div className="flex flex-wrap gap-2">
           {can.add && inv.status !== 'cancelled' && due > 0 && <button type="button" className="btn-primary" onClick={() => setPaying(true)}>Record payment</button>}
-          <a className="btn bg-green-100 text-green-800 hover:bg-green-200" href={waLink(inv.customer.phone, msg)} target="_blank" rel="noreferrer">Share on WhatsApp</a>
-          <button type="button" className="btn-ghost" onClick={() => window.print()}>Print / PDF</button>
+          <a className="btn bg-green-100 text-green-800 hover:bg-green-200" href={waLink(inv.customer.phone, msg)} target="_blank" rel="noreferrer">💬 WhatsApp text</a>
+          <button type="button" className="btn bg-green-600 text-white hover:bg-green-700" onClick={() => shareBillPdf(inv, business, { message: `${business.name} – ${inv.number} – ${inr(inv.total)}` }).catch((x) => setErr(x.message))}>📄 Share PDF</button>
+          <button type="button" className="btn-ghost" onClick={() => downloadBillPdf(inv, business).catch((x) => setErr(x.message))}>⬇️ PDF</button>
+          <button type="button" className="btn-ghost" onClick={() => window.print()}>Print</button>
           {can.edit && inv.status !== 'cancelled' && <Link className="btn-ghost" to={`/sales/invoices/${inv.id}/edit`}>Edit</Link>}
           {can.delete && inv.status !== 'cancelled' && (
             <button type="button" className="btn-ghost text-red-700" onClick={() => window.confirm('Cancel this invoice? It will not count in sales.') && act(() => api(`/invoices/${inv.id}/cancel`, { method: 'POST' }))}>Cancel invoice</button>

@@ -5,6 +5,7 @@ import { useAuth } from '../../auth.jsx';
 import { Badge, ErrorBox, useApi } from '../../components/ui.jsx';
 import InvoicePaper from '../../components/InvoicePaper.jsx';
 import { fmtDate, inr, waLink } from '../../lib/format.js';
+import { downloadBillPdf, shareBillPdf } from '../../lib/billPdf.js';
 
 export default function QuotationView() {
   const { id } = useParams();
@@ -75,7 +76,9 @@ export default function QuotationView() {
               )}
             </>
           )}
-          <button type="button" className="btn-ghost" onClick={() => window.print()}>Print / PDF</button>
+          <button type="button" className="btn bg-green-600 text-white hover:bg-green-700" onClick={() => shareBillPdf(q, business, { kind: 'quotation', message: `${business.name} – Quotation ${q.number}` }).catch((x) => setErr(x.message))}>📄 Share PDF</button>
+          <button type="button" className="btn-ghost" onClick={() => downloadBillPdf(q, business, { kind: 'quotation' }).catch((x) => setErr(x.message))}>⬇️ PDF</button>
+          <button type="button" className="btn-ghost" onClick={() => window.print()}>Print</button>
           {can.delete && q.status !== 'converted' && <button type="button" className="btn-ghost text-red-700" onClick={remove}>Delete</button>}
         </div>
       </div>
