@@ -22,6 +22,9 @@ model Business {
   state       String?
   plan        String           @default("trial") // trial, free, basic, pro
   trialEndsAt DateTime
+  planEndsAt  DateTime?        // paid plan valid till (null for trial/free)
+  planCycle   String?          // monthly, yearly
+  adminNote   String?          // private note by BusinessMithra super admin
   status      String           @default("active") // active, blocked
   invoicePrefix String         @default("INV-")
   nextInvoiceNo Int            @default(1)
@@ -61,6 +64,7 @@ model Business {
   accounts    Account[]
   expenses    Expense[]
   orders      ShopOrder[]
+  subscriptionRequests SubscriptionRequest[]
 }
 
 model User {
@@ -455,4 +459,40 @@ model SavedAddress {
   updatedAt DateTime @updatedAt
 
   @@index([phone])
+}
+
+// ───────────── PLATFORM (BusinessMithra super admin) ─────────────
+
+model Plan {
+  code         String   @id // free, basic, pro
+  name         String
+  priceMonthly Decimal  @default(0) @db.Decimal(12, 2)
+  priceYearly  Decimal  @default(0) @db.Decimal(12, 2)
+  maxUsers     Int      @default(1) // 0 = unlimited
+  modules      String[] @default([])
+  description  String?
+  active       Boolean  @default(true)
+  sort         Int      @default(0)
+}
+
+model SubscriptionRequest {
+  id          String    @id @default(cuid())
+  businessId  String
+  business    Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  planCode    String
+  cycle       String    @default("monthly") // monthly, yearly
+  amount      Decimal   @db.Decimal(12, 2)
+  paymentMode String    @default("cash") // cash, upi, bank
+  reference   String?
+  note        String?
+  status      String    @default("pending") // pending, approved, rejected
+  adminNote   String?
+  requestedBy String?
+  createdAt   DateTime  @default(now())
+  decidedAt   DateTime?
+  validFrom   DateTime?
+  validTill   DateTime?
+
+  @@index([status, createdAt])
+  @@index([businessId, createdAt])
 }

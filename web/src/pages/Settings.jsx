@@ -116,16 +116,16 @@ export default function Settings() {
           {MODULE_ORDER.map((m) => {
             const row = mods.find((x) => x.module === m);
             const on = !!row?.enabled;
-            const locked = m === 'management';
+            const locked = m === 'management' || row?.inPlan === false;
             return (
               <li key={m} className="flex items-center justify-between gap-4 py-3">
                 <div>
                   <p className="font-semibold">{MODULE_INFO[m].label}</p>
-                  <p className="text-sm text-muted">{locked ? 'Always on' : MODULE_INFO[m].desc}</p>
+                  <p className="text-sm text-muted">{m === 'management' ? 'Always on' : row?.inPlan === false ? 'Mee plan lo ledu – Plan & Billing lo upgrade cheyyandi' : MODULE_INFO[m].desc}</p>
                 </div>
                 <label className={`relative inline-flex items-center ${locked ? 'opacity-60' : 'cursor-pointer'}`}>
                   <span className="sr-only">{MODULE_INFO[m].label}</span>
-                  <input type="checkbox" className="sr-only peer" checked={on} disabled={locked} onChange={(e) => toggle(m, e.target.checked)} />
+                  <input type="checkbox" className="sr-only peer" checked={on && row?.inPlan !== false} disabled={locked} onChange={(e) => toggle(m, e.target.checked)} />
                   <span className="w-12 h-7 rounded-full bg-gray-300 peer-checked:bg-brand transition after:content-[''] after:absolute after:top-1 after:left-1 after:w-5 after:h-5 after:rounded-full after:bg-white after:transition peer-checked:after:translate-x-5 peer-focus-visible:ring-2 peer-focus-visible:ring-brand/40" />
                 </label>
               </li>

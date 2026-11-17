@@ -49,7 +49,8 @@ router.put('/business', async (req, res, next) => {
 router.get('/modules', async (req, res, next) => {
   try {
     const rows = await prisma.businessModule.findMany({ where: { businessId: req.businessId } });
-    res.json({ modules: MODULES.map((m) => ({ module: m, enabled: m === 'management' || rows.some((r) => r.module === m && r.enabled) })) });
+    const allowed = req.user.business.access?.modules;
+    res.json({ modules: MODULES.map((m) => ({ module: m, enabled: m === 'management' || rows.some((r) => r.module === m && r.enabled), inPlan: !allowed || allowed.includes(m) })) });
   } catch (e) {
     next(e);
   }
@@ -61,6 +62,8 @@ router.put('/modules', async (req, res, next) => {
   try {
     const d = moduleSchema.parse(req.body);
     if (d.module === 'management') throw new HttpError(400, 'Management module is always on');
+    const allowed = req.user.business.access?.modules;
+    if (d.enabled && allowed && !allowed.includes(d.module)) throw new HttpError(400, 'This module is not in your plan. Please upgrade from Plan & Billing.');
     await prisma.businessModule.upsert({
       where: { businessId_module: { businessId: req.businessId, module: d.module } },
       update: { enabled: d.enabled },

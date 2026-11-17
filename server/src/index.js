@@ -22,6 +22,8 @@ import salesReportRoutes from './routes/salesReports.js';
 import accountsRoutes from './routes/accounts.js';
 import shopRoutes from './routes/shop.js';
 import shopAdminRoutes from './routes/shopAdmin.js';
+import billingRoutes from './routes/billing.js';
+import adminRoutes from './routes/admin.js';
 import { Prisma } from '@prisma/client';
 
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
@@ -83,6 +85,8 @@ app.use('/api/reports/sales', salesReportRoutes);
 app.use('/api/finance', accountsRoutes);
 app.use('/api/shop', shopRoutes);
 app.use('/api/shop-admin', shopAdminRoutes);
+app.use('/api/billing', billingRoutes);
+app.use('/api/admin', adminRoutes);
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
 
 // The same server also serves the built web app (one Render service, one URL).

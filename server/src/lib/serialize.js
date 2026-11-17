@@ -22,6 +22,7 @@ export function mePayload(user) {
       trialDaysLeft: trialDaysLeft(b),
     },
     modules: MODULES.filter((m) => isModuleEnabled(user, m)),
+    subscription: user.business.access || null,
     permissions,
   };
 }

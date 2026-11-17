@@ -8,6 +8,7 @@ import { h } from '../lib/route.js';
 import { computeDoc, num, r2 } from '../lib/money.js';
 import { HttpError } from '../middleware/auth.js';
 import { otpEnabled, sendOtp, shopPhone, verifyOtp } from '../lib/otp.js';
+import { accessState, getPlans } from '../lib/plans.js';
 
 const router = Router();
 
@@ -24,6 +25,7 @@ const priceWithTax = (it) => r2(num(it.price) * (1 + num(it.taxRate) / 100));
 async function loadShop(slug) {
   const b = await prisma.business.findUnique({ where: { slug: String(slug || '').toLowerCase() } });
   if (!b || !b.shopEnabled || b.status === 'blocked') throw new HttpError(404, 'Shop not found');
+  if (!accessState(b, await getPlans()).active) throw new HttpError(404, 'This shop is closed for now');
   return b;
 }
 

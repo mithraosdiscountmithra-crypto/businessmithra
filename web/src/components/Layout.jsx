@@ -14,7 +14,7 @@ function Sidebar({ onNavigate }) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const visible = MODULE_ORDER.filter((m) => me.modules.includes(m) && me.permissions[m]?.view);
-  const days = me.business.trialDaysLeft;
+  const sub = me.subscription;
 
   const doLogout = async () => {
     await logout();
@@ -58,10 +58,15 @@ function Sidebar({ onNavigate }) {
         </>
       )}
       <div className="mt-auto pt-4 flex flex-col gap-3">
-        {days !== null && (
+        {sub && (
           <div className="rounded-2xl bg-navy-700 p-4 flex flex-col gap-1">
-            <span className="text-sm font-bold text-white">Free trial</span>
-            <span className="text-xs text-navy-200">{days > 0 ? `${days} days left` : 'Trial ended'}</span>
+            <span className="text-sm font-bold text-white">{sub.planName}</span>
+            <span className="text-xs text-navy-200">{!sub.active ? 'Expired' : sub.daysLeft === null ? 'Active' : `${sub.daysLeft} days left`}</span>
+            {me.user.isOwner && (
+              <NavLink to="/billing" onClick={onNavigate} className="mt-2 text-center bg-white text-navy font-bold text-sm rounded-lg py-2">
+                {sub.plan === 'trial' || !sub.active || (sub.daysLeft !== null && sub.daysLeft <= 7) ? 'Upgrade / Renew' : 'Plan & Billing'}
+              </NavLink>
+            )}
           </div>
         )}
         <button type="button" onClick={doLogout} className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-navy-200 hover:bg-white/5 hover:text-white">
@@ -75,7 +80,8 @@ function Sidebar({ onNavigate }) {
 export default function Layout({ children }) {
   const { me } = useAuth();
   const [open, setOpen] = useState(false);
-  const expired = me.business.trialDaysLeft === 0;
+  const sub = me.subscription;
+  const warn = sub && sub.active && sub.daysLeft !== null && sub.daysLeft <= 5;
 
   return (
     <div className="min-h-screen lg:flex">
@@ -111,10 +117,10 @@ export default function Layout({ children }) {
           </div>
         </header>
         <main className="flex-1 px-4 py-6 lg:px-8 lg:py-6 max-w-6xl w-full print:p-0 print:max-w-none">
-          {expired && (
-            <div className="error-box mb-5 print:hidden">
-              Your 30-day free trial has ended. Plans and payments are coming soon — please contact BusinessMithra to continue.
-            </div>
+          {warn && me.user.isOwner && (
+            <NavLink to="/billing" className="block rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-sm font-semibold px-4 py-3 mb-5 print:hidden">
+              ⏳ Mee {sub.planName} inka {sub.daysLeft} rojullo ayipotundi. Ippude renew cheyyandi →
+            </NavLink>
           )}
           {children}
         </main>

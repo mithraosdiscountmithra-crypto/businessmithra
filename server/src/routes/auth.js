@@ -5,6 +5,7 @@ import { prisma, logActivity } from '../lib/prisma.js';
 import { BUSINESS_TYPES, DEFAULT_ROLES, MODULES, TRIAL_DAYS } from '../lib/constants.js';
 import { HttpError, requireAuth, signToken, setAuthCookie, clearAuthCookie } from '../middleware/auth.js';
 import { mePayload } from '../lib/serialize.js';
+import { accessState, getPlans } from '../lib/plans.js';
 
 const router = Router();
 
@@ -24,11 +25,14 @@ const loginSchema = z.object({
   password: z.string().min(1, 'Enter your password'),
 });
 
-const loadUser = (id) =>
-  prisma.user.findUnique({
+async function loadUser(id) {
+  const user = await prisma.user.findUnique({
     where: { id },
     include: { business: { include: { modules: true } }, role: { include: { permissions: true } } },
   });
+  if (user) user.business.access = accessState(user.business, await getPlans());
+  return user;
+}
 
 router.post('/signup', async (req, res, next) => {
   try {

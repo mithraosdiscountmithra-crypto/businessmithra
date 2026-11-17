@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import { prisma } from '../lib/prisma.js';
 import { COOKIE_NAME } from '../lib/constants.js';
+import { accessState, getPlans } from '../lib/plans.js';
 
 export class HttpError extends Error {
   constructor(status, message, code) {
@@ -54,8 +55,14 @@ export function requireAuth(options = {}) {
       if (user.business.status === 'blocked') {
         throw new HttpError(403, 'This business account is blocked. Please contact BusinessMithra support.', 'BLOCKED');
       }
-      if (!options.allowExpired && trialDaysLeft(user.business) === 0) {
-        throw new HttpError(403, 'Your free trial has ended. Please choose a plan to continue.', 'TRIAL_EXPIRED');
+      const access = accessState(user.business, await getPlans());
+      user.business.access = access;
+      if (!options.allowExpired && !access.active) {
+        throw new HttpError(
+          403,
+          access.plan === 'trial' ? 'Your free trial has ended. Please choose a plan to continue.' : 'Your plan has expired. Please renew to continue.',
+          'PLAN_EXPIRED',
+        );
       }
       req.user = user;
       req.businessId = user.businessId;
@@ -73,6 +80,8 @@ export function requireOwner(req, _res, next) {
 
 export function isModuleEnabled(user, module) {
   if (module === 'management') return true;
+  const allowed = user.business.access?.modules; // null = all (trial)
+  if (allowed && !allowed.includes(module)) return false;
   return user.business.modules.some((m) => m.module === module && m.enabled);
 }
 

@@ -55,6 +55,11 @@ router.post('/', async (req, res, next) => {
   try {
     const d = addSchema.parse(req.body);
     await assertRole(req.businessId, d.roleId);
+    const max = req.user.business.access?.maxUsers || 0;
+    if (max > 0) {
+      const active = await prisma.user.count({ where: { businessId: req.businessId, status: 'active' } });
+      if (active >= max) throw new HttpError(400, `Your plan allows ${max} user${max > 1 ? 's' : ''}. Please upgrade from Plan & Billing to add more staff.`);
+    }
     const exists = await prisma.user.findUnique({ where: { email: d.email } });
     if (exists) throw new HttpError(409, 'This email is already used by another account');
     const u = await prisma.user.create({

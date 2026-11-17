@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from './auth.jsx';
 import Layout from './components/Layout.jsx';
 import Login from './pages/Login.jsx';
@@ -26,6 +26,8 @@ import Storefront from './pages/shop/Storefront.jsx';
 import OrderStatus from './pages/shop/OrderStatus.jsx';
 import Orders from './pages/sales/Orders.jsx';
 import ShopSettings from './pages/ShopSettings.jsx';
+import Billing from './pages/Billing.jsx';
+import AdminApp from './pages/admin/AdminApp.jsx';
 
 function Splash() {
   return (
@@ -38,10 +40,27 @@ function Splash() {
   );
 }
 
+function Expired() {
+  const { me, logout } = useAuth();
+  return (
+    <div className="min-h-screen flex items-center justify-center p-6">
+      <div className="card p-8 max-w-md text-center flex flex-col gap-3">
+        <h1 className="text-xl font-extrabold">{me.business.name} plan expire ayyindi</h1>
+        <p className="text-muted">Mee owner plan renew chesina ventane malli vaadochu. Data anta safe ga undi.</p>
+        <button type="button" className="btn-ghost" onClick={logout}>Logout</button>
+      </div>
+    </div>
+  );
+}
+
 function Private({ children, ownerOnly = false, module }) {
   const { me, loading } = useAuth();
+  const { pathname } = useLocation();
   if (loading) return <Splash />;
   if (!me) return <Navigate to="/login" replace />;
+  if (me.subscription && !me.subscription.active && pathname !== '/billing') {
+    return me.user.isOwner ? <Navigate to="/billing" replace /> : <Expired />;
+  }
   if (ownerOnly && !me.user.isOwner) return <Navigate to="/" replace />;
   if (module && !(me.modules.includes(module) && me.permissions[module]?.view)) return <Navigate to="/" replace />;
   return <Layout>{children}</Layout>;
@@ -60,6 +79,8 @@ export default function App() {
       <Route path="/login" element={<PublicOnly><Login /></PublicOnly>} />
       <Route path="/signup" element={<PublicOnly><Signup /></PublicOnly>} />
       <Route path="/i/:token" element={<PublicInvoice />} />
+      <Route path="/admin/*" element={<AdminApp />} />
+      <Route path="/billing" element={<Private ownerOnly><Billing /></Private>} />
       <Route path="/s/:slug" element={<Storefront />} />
       <Route path="/o/:token" element={<OrderStatus />} />
       <Route path="/shop" element={<Private ownerOnly><ShopSettings /></Private>} />
