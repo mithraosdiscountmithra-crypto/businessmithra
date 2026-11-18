@@ -24,6 +24,7 @@ const businessSchema = z.object({
   quotePrefix: z.string().trim().min(1).max(12).regex(/^[A-Za-z0-9\-\/]+$/, 'Prefix can have letters, numbers, - and /').optional(),
   invoiceTerms: opt(1000),
   bankDetails: opt(500),
+  autoSendPaidBill: z.boolean().optional(),
 });
 
 router.get('/business', async (req, res, next) => {

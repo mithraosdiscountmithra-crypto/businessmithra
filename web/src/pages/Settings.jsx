@@ -19,6 +19,7 @@ export default function Settings() {
           gstin: business.gstin || '', address: business.address || '', city: business.city || '', state: business.state || '',
           invoicePrefix: business.invoicePrefix || 'INV-', quotePrefix: business.quotePrefix || 'QT-',
           invoiceTerms: business.invoiceTerms || '', bankDetails: business.bankDetails || '',
+          autoSendPaidBill: business.autoSendPaidBill ?? true,
         });
         setMods(modules);
       } catch (e) {
@@ -100,6 +101,11 @@ export default function Settings() {
             <label className="label" htmlFor="f-terms">Terms & conditions</label>
             <textarea id="f-terms" rows={2} className="input h-auto py-2.5" value={b.invoiceTerms} onChange={set('invoiceTerms')} placeholder="Goods once sold will not be taken back." />
           </div>
+          <label className="sm:col-span-2 flex items-start gap-3 rounded-xl border border-line p-3">
+            <input type="checkbox" className="w-5 h-5 mt-0.5 accent-brand" checked={b.autoSendPaidBill} onChange={(e) => setB({ ...b, autoSendPaidBill: e.target.checked })} />
+            <span><b>Bill full ga pay ayyaka PDF automatic ga customer WhatsApp ki pampu</b>
+              <span className="block text-xs text-muted">Customer mobile number unna bills ki matrame. Okko bill ki okkasari matrame velthundi.</span></span>
+          </label>
         </div>
         <div className="flex items-center gap-3">
           <button type="submit" className="btn-primary" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>

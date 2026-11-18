@@ -5,7 +5,7 @@ import { prisma, logActivity } from '../lib/prisma.js';
 import { h } from '../lib/route.js';
 import { computeDoc, dateOnly, docSchema, GST_RATES, invoiceStatus, istToday, num, parseRange, r2 } from '../lib/money.js';
 import { HttpError, requireAuth, requirePermission } from '../middleware/auth.js';
-import { autoSendEnabled, sendBillOnWhatsApp } from '../lib/whatsappBill.js';
+import { autoSendEnabled, queuePaidBill, sendBillOnWhatsApp } from '../lib/whatsappBill.js';
 import { billFileName } from '../lib/billPdf.js';
 import { applyLines, reverseRef } from '../lib/stock.js';
 
@@ -59,10 +59,9 @@ export async function recalcInvoice(tx, invoiceId) {
     tx.creditNote.aggregate({ where: { invoiceId, settle: 'adjust' }, _sum: { total: true } }),
   ]);
   const paid = r2(num(agg._sum.amount) + num(cn._sum.total));
-  await tx.invoice.update({
-    where: { id: invoiceId },
-    data: { amountPaid: paid, status: inv.status === 'cancelled' ? 'cancelled' : invoiceStatus(inv.total, paid) },
-  });
+  const status = inv.status === 'cancelled' ? 'cancelled' : invoiceStatus(inv.total, paid);
+  await tx.invoice.update({ where: { id: invoiceId }, data: { amountPaid: paid, status } });
+  if (status === 'paid' && inv.status !== 'paid' && !inv.paidBillSentAt) queuePaidBill(invoiceId);
 }
 
 router.get('/', requirePermission('sales', 'view'), h(async (req, res) => {

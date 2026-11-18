@@ -53,6 +53,7 @@ model Business {
   shopMapUrl    String?
   nextOrderNo   Int            @default(1)
   nextCreditNo  Int            @default(1)
+  autoSendPaidBill Boolean     @default(true) // WhatsApp the PDF automatically once a bill is fully paid
   wishesEnabled Boolean        @default(false)
   wishOffer     String?        // e.g. "10% off this week"
   lastWishDay   String?        // YYYY-MM-DD (IST) when birthday wishes last ran
@@ -334,6 +335,7 @@ model Invoice {
 
   @@unique([businessId, number])
   @@index([businessId, date])
+  paidBillSentAt DateTime? // when the paid bill PDF went out on WhatsApp
 }
 
 model InvoiceItem {
