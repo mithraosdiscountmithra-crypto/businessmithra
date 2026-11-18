@@ -61,9 +61,10 @@ export async function verifyOtp(phone, code) {
 // Returns the verified phone from "Authorization: Bearer <token>", or null.
 export function shopPhone(req) {
   const m = /^Bearer (.+)$/.exec(req.headers.authorization || '');
-  if (!m) return null;
+  const raw = m ? m[1] : req.cookies?.bm_shop;
+  if (!raw) return null;
   try {
-    const p = jwt.verify(m[1], process.env.JWT_SECRET, { audience: 'shop' });
+    const p = jwt.verify(raw, process.env.JWT_SECRET, { audience: 'shop' });
     return p.scope === 'shop' ? p.phone : null;
   } catch {
     return null;

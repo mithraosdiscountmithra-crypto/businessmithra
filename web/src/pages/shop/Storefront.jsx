@@ -160,6 +160,20 @@ export default function Storefront() {
 
   useEffect(() => saveCart(slug, cart), [slug, cart]);
 
+  // Phone forgot its saved details (some QR scanner browsers do)? Get them back from the cookie.
+  useEffect(() => {
+    if (getShopToken() && getMe()?.phone) return;
+    api('/shop/me/device').then((d) => {
+      if (d.token && !getShopToken()) setShopToken(d.token);
+      if (d.phone && !getMe()?.phone) {
+        const m = { name: d.name || '', phone: d.phone, address: '', verified: Boolean(d.token) };
+        setMe(m);
+        setMeState(m);
+        setForm((f) => ({ ...f, name: f.name || m.name, phone: f.phone || m.phone }));
+      }
+    }).catch(() => {});
+  }, []);
+
   const loadMember = async () => {
     const t = getShopToken();
     if (!t) { setBenefits(null); return; }
@@ -416,7 +430,7 @@ export default function Storefront() {
   const contactAuth = ready ? (
     <p className="text-sm bg-gray-50 rounded-xl p-3">
       {shop.otp ? '✅ ' : ''}<strong>{me.name}</strong> · {me.phone}{' '}
-      <button type="button" className="underline font-semibold text-xs ml-1" onClick={() => { clearMe(); setShopToken(null); setMeState(null); setOtpStep(false); setForm((f) => ({ ...f, name: '', phone: '' })); }}>Change</button>
+      <button type="button" className="underline font-semibold text-xs ml-1" onClick={() => { clearMe(); setShopToken(null); api('/shop/me/forget', { method: 'POST' }).catch(() => {}); setMeState(null); setOtpStep(false); setForm((f) => ({ ...f, name: '', phone: '' })); }}>Change</button>
     </p>
   ) : (
     <>
@@ -485,7 +499,7 @@ export default function Storefront() {
         {me && (
           <p className="max-w-5xl mx-auto px-4 pt-2 text-xs text-gray-600">
             Namaste <strong>{me.name}</strong> ({me.phone}) ·{' '}
-            <button type="button" className="underline font-semibold" onClick={() => { clearMe(); setShopToken(null); setMeState(null); setOtpStep(false); setForm((f) => ({ ...f, name: '', phone: '' })); }}>Not you?</button>
+            <button type="button" className="underline font-semibold" onClick={() => { clearMe(); setShopToken(null); api('/shop/me/forget', { method: 'POST' }).catch(() => {}); setMeState(null); setOtpStep(false); setForm((f) => ({ ...f, name: '', phone: '' })); }}>Not you?</button>
           </p>
         )}
         {benefits && (

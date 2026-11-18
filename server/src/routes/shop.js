@@ -228,6 +228,7 @@ router.post('/:slug/hello', writeLimiter, h(async (req, res) => {
     const c = await prisma.customer.create({ data: { businessId: b.id, name: d.name, phone: d.phone, tags: ['Online'] } });
     await logActivity(b.id, null, 'shop_visit', 'customer', c.id);
   }
+  rememberDevice(res, 'bm_shop_me', JSON.stringify({ name: d.name.slice(0, 60), phone: d.phone }));
   res.json({ ok: true });
 }));
 
@@ -242,7 +243,29 @@ router.post('/otp/send', otpLimiter, h(async (req, res) => {
 router.post('/otp/verify', otpLimiter, h(async (req, res) => {
   const d = z.object({ phone, code: z.string().trim().regex(/^\d{6}$/, 'Enter the 6-digit OTP') }).parse(req.body);
   const token = await verifyOtp(d.phone, d.code);
+  rememberDevice(res, 'bm_shop', token);
   res.json({ token });
+}));
+
+// Second memory for this phone (a cookie), in case the browser forgets its local storage.
+const DEVICE_COOKIE = { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', maxAge: 180 * 86400000, path: '/api/shop' };
+function rememberDevice(res, name, value) {
+  res.cookie(name, value, DEVICE_COOKIE);
+}
+
+router.post('/me/forget', (_req, res) => {
+  res.clearCookie('bm_shop', { path: '/api/shop' });
+  res.clearCookie('bm_shop_me', { path: '/api/shop' });
+  res.json({ ok: true });
+});
+
+// Who is this phone? Lets the shop skip asking name / mobile / OTP again.
+router.get('/me/device', h(async (req, res) => {
+  const phoneNo = shopPhone(req);
+  let me = null;
+  try { me = req.cookies?.bm_shop_me ? JSON.parse(req.cookies.bm_shop_me) : null; } catch { me = null; }
+  if (me && !(typeof me.name === 'string' && /^[6-9]\d{9}$/.test(String(me.phone)))) me = null;
+  res.json({ token: phoneNo ? req.cookies?.bm_shop || null : null, name: me?.name || null, phone: phoneNo || me?.phone || null });
 }));
 
 // "My Orders": with OTP login → every order of that mobile in this shop; otherwise only orders saved on this phone.
