@@ -53,6 +53,10 @@ model Business {
   shopMapUrl    String?
   nextOrderNo   Int            @default(1)
   nextCreditNo  Int            @default(1)
+  allowOnlinePay Boolean       @default(false) // Razorpay in the online shop
+  allowCod      Boolean        @default(true)  // cash on delivery / pay at shop
+  rzpKeyId      String?
+  rzpKeySecret  String?        // encrypted
   autoSendPaidBill Boolean     @default(true) // WhatsApp the PDF automatically once a bill is fully paid
   wishesEnabled Boolean        @default(false)
   wishOffer     String?        // e.g. "10% off this week"
@@ -448,6 +452,9 @@ model ShopOrder {
   total         Decimal          @default(0) @db.Decimal(12, 2)
   paymentStatus String           @default("unpaid") // unpaid, paid
   paymentMode   String?
+  payChoice     String           @default("cod") // online, cod
+  rzpOrderId    String?
+  rzpPaymentId  String?
   invoiceId     String?
   seenAt        DateTime?
   createdAt     DateTime         @default(now())
@@ -526,9 +533,10 @@ model SubscriptionRequest {
   paymentMode String    @default("cash") // cash, upi, bank
   reference   String?
   note        String?
-  status      String    @default("pending") // pending, approved, rejected
+  status      String    @default("pending") // pending, approved, rejected, awaiting_payment (online started)
   adminNote   String?
   requestedBy String?
+  rzpOrderId  String?
   createdAt   DateTime  @default(now())
   decidedAt   DateTime?
   validFrom   DateTime?

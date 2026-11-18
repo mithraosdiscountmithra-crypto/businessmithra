@@ -5,11 +5,28 @@ import { ErrorBox, Field, Modal, PageHeader, useApi } from '../components/ui.jsx
 import { MODULE_INFO } from '../constants.js';
 import { fmtDate, fmtDateTime, inr } from '../lib/format.js';
 import UpiPay from '../components/UpiPay.jsx';
+import { payWithRazorpay } from '../lib/razorpay.js';
 
 const STATUS = { pending: ['Waiting for approval', 'bg-amber-100 text-amber-900'], approved: ['Approved', 'bg-green-100 text-green-800'], rejected: ['Rejected', 'bg-red-100 text-red-800'] };
-const MODE = { cash: 'Cash', upi: 'UPI', bank: 'Bank transfer' };
+const MODE = { cash: 'Cash', upi: 'UPI', bank: 'Bank transfer', online: 'Online (Razorpay)' };
 
-function RequestForm({ plan, cycle, payTo, onClose, onSent }) {
+function RequestForm({ plan, cycle, payTo, online, onClose, onSent }) {
+  const [paying, setPaying] = useState(false);
+  const [done, setDone] = useState(null);
+  const payOnline = async () => {
+    setErr('');
+    setPaying(true);
+    try {
+      const pay = await api('/billing/online/order', { method: 'POST', body: { planCode: plan.code, cycle } });
+      const r = await payWithRazorpay(pay);
+      const v = await api('/billing/online/verify', { method: 'POST', body: r });
+      setDone(v.validTill);
+    } catch (e) {
+      if (!e.dismissed) setErr(e.message);
+    } finally {
+      setPaying(false);
+    }
+  };
   const [f, setF] = useState({ paymentMode: 'cash', reference: '', note: '' });
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
@@ -37,6 +54,19 @@ function RequestForm({ plan, cycle, payTo, onClose, onSent }) {
           <p className="text-3xl font-extrabold">{inr(amount)}</p>
           <p className="text-xs text-muted">{cycle === 'yearly' ? '12 months' : '1 month'} · Approve ayina roju nunchi</p>
         </div>
+        {done !== null ? (
+          <div className="ok-box flex flex-col gap-2 text-center">
+            <p className="font-bold text-lg">✅ Payment successful! {plan.name} plan active.</p>
+            {done && <p className="text-sm">{fmtDate(done)} varaku</p>}
+            <button type="button" className="btn-primary" onClick={onSent}>Done</button>
+          </div>
+        ) : online && (
+          <div className="flex flex-col gap-1">
+            <button type="button" className="btn-primary h-12" disabled={paying} onClick={payOnline}>{paying ? 'Opening…' : `💳 Pay ${inr(amount)} online – plan ventane active`}</button>
+            <p className="text-xs text-muted text-center">UPI · Card · Netbanking (Razorpay). Approval kosam wait avasaram ledu.</p>
+            <p className="text-center text-xs font-semibold text-muted pt-2">— leda cash / UPI tho pay chesi request pampandi —</p>
+          </div>
+        )}
         <div className="text-sm flex flex-col gap-1.5">
           <p className="font-bold">Ela pay cheyyali:</p>
           <p>💵 <strong>Cash:</strong> BusinessMithra team ki direct ga ivvandi.</p>
@@ -162,7 +192,7 @@ export default function Billing() {
         </section>
       )}
 
-      {picked && <RequestForm plan={picked} cycle={cycle} payTo={data.payTo} onClose={() => setPicked(null)} onSent={() => { setPicked(null); reload(); refresh(); }} />}
+      {picked && <RequestForm plan={picked} cycle={cycle} payTo={data.payTo} online={data.online} onClose={() => setPicked(null)} onSent={() => { setPicked(null); reload(); refresh(); }} />}
     </div>
   );
 }

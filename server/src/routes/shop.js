@@ -13,6 +13,8 @@ import { activeBenefits } from '../lib/membership.js';
 import { available } from '../lib/stock.js';
 import { sendTemplate } from '../lib/aisensy.js';
 import { checkCoupon } from '../lib/coupons.js';
+import { capturedPayment, createOrder, shopKeys, validSignature } from '../lib/razorpay.js';
+import { markOrderPaidOnline } from '../lib/shopPay.js';
 
 const router = Router();
 
@@ -36,7 +38,7 @@ async function loadShop(slug) {
 const publicBusiness = (b) => ({
   name: b.name, slug: b.slug, type: b.type, tagline: b.shopTagline, about: b.shopAbout, logo: b.shopLogo, cover: b.shopCover,
   color: b.shopColor, timings: b.shopTimings, phone: b.phone, address: b.address, city: b.city, state: b.state,
-  upi: Boolean(b.upiId), allowPickup: b.allowPickup, allowDelivery: b.allowDelivery, deliveryFee: num(b.deliveryFee),
+  upi: Boolean(b.upiId), onlinePay: Boolean(b.allowOnlinePay && shopKeys(b)), cod: b.allowCod !== false || !(b.allowOnlinePay && shopKeys(b)), allowPickup: b.allowPickup, allowDelivery: b.allowDelivery, deliveryFee: num(b.deliveryFee),
   minOrder: num(b.minOrder), allowBooking: b.allowBooking, allowTable: b.allowTable, otp: otpEnabled(),
   lat: b.shopLat, lng: b.shopLng, mapUrl: b.shopMapUrl,
 });
@@ -74,6 +76,7 @@ const phone = z.string().trim().regex(/^[6-9]\d{9}$/, 'Enter a valid 10-digit mo
 const orderSchema = z.object({
   kind: z.enum(['order', 'booking', 'table']).default('order'),
   couponCode: z.string().trim().max(30).optional().nullable(),
+  payChoice: z.enum(['online', 'cod']).default('cod'),
   guests: z.preprocess((v) => (v === null || v === '' || v === undefined ? null : Number(v)), z.number().int().min(1, 'How many people?').max(100).nullable()),
   name: z.string().trim().min(2, 'Enter your name').max(80),
   phone,
@@ -164,6 +167,14 @@ router.post('/:slug/orders', writeLimiter, h(async (req, res) => {
   ].filter(Boolean).join(' · ') || null;
   const total = Math.round(itemsTotal + deliveryFee);
 
+  // Payment choice: online (Razorpay) or cash on delivery / pay at shop.
+  const keys = shopKeys(b);
+  const onlineOk = Boolean(b.allowOnlinePay && keys && d.kind === 'order' && total > 0);
+  const codOk = b.allowCod !== false || !onlineOk;
+  if (d.kind === 'order' && d.payChoice === 'online' && !onlineOk) throw new HttpError(400, 'Online payment is not available at this shop. Choose Cash on delivery.');
+  if (d.kind === 'order' && d.payChoice === 'cod' && !codOk) throw new HttpError(400, 'This shop takes online payment only');
+  const payChoice = d.kind === 'order' ? d.payChoice : 'cod';
+
   if (d.address && d.landmark) d.address = `${d.address} (Landmark: ${d.landmark})`;
   const customerId = await findOrCreateCustomer(b.id, d.name, d.phone, d.address);
   const order = await prisma.$transaction(async (tx) => {
@@ -173,6 +184,7 @@ router.post('/:slug/orders', writeLimiter, h(async (req, res) => {
         businessId: b.id,
         number: `${{ booking: 'BK', table: 'TB' }[d.kind] || 'ORD'}-${bb.nextOrderNo - 1}`,
         kind: d.kind,
+        payChoice,
         guests: d.kind === 'table' ? d.guests : null,
         token: crypto.randomBytes(16).toString('hex'),
         customerId, name: d.name, phone: d.phone, address: d.address, note: d.note,
@@ -200,7 +212,9 @@ router.post('/:slug/orders', writeLimiter, h(async (req, res) => {
     if (same) await prisma.savedAddress.update({ where: { id: same.id }, data });
     else if ((await prisma.savedAddress.count({ where: { phone: verified } })) < 10) await prisma.savedAddress.create({ data: { ...data, phone: verified } });
   }
-  res.status(201).json({ token: order.token, number: order.number });
+  let pay = null;
+  if (payChoice === 'online') pay = await startOnlinePay(b, order).catch((e) => { console.error('rzp order', e.message); return null; });
+  res.status(201).json({ token: order.token, number: order.number, pay });
 }));
 
 const helloSchema = z.object({ name: z.string().trim().min(2, 'Enter your name').max(80), phone });
@@ -321,12 +335,60 @@ router.post('/:slug/enquiry', writeLimiter, h(async (req, res) => {
   res.status(201).json({ ok: true });
 }));
 
+// ── Online payment for shop orders (Razorpay) ──
+async function startOnlinePay(b, order) {
+  const keys = shopKeys(b);
+  if (!keys) throw new HttpError(400, 'Online payment is not available at this shop');
+  const rz = await createOrder(keys, { amount: num(order.total), receipt: order.number, notes: { kind: 'shop', orderId: order.id, businessId: b.id } });
+  await prisma.shopOrder.update({ where: { id: order.id }, data: { rzpOrderId: rz.id } });
+  return {
+    keyId: keys.keyId, orderId: rz.id, amount: rz.amount, name: b.name, description: `Order ${order.number}`,
+    image: b.shopLogo || undefined, color: b.shopColor || '#3730A3', prefill: { name: order.name, contact: order.phone }, test: keys.keyId.startsWith('rzp_test_'),
+  };
+}
+
+async function orderByToken(token) {
+  if (!/^[a-f0-9]{32}$/.test(String(token || ''))) throw new HttpError(404, 'Order not found');
+  const o = await prisma.shopOrder.findUnique({ where: { token: String(token) }, include: { business: true } });
+  if (!o) throw new HttpError(404, 'Order not found');
+  return o;
+}
+
+router.post('/order/:token/pay', writeLimiter, h(async (req, res) => {
+  const o = await orderByToken(req.params.token);
+  if (o.paymentStatus === 'paid') throw new HttpError(400, 'This order is already paid');
+  if (o.status === 'cancelled') throw new HttpError(400, 'This order is cancelled');
+  if (o.kind !== 'order' || !o.business.allowOnlinePay) throw new HttpError(400, 'Online payment is not available for this order');
+  res.json({ pay: await startOnlinePay(o.business, o) });
+}));
+
+router.post('/order/:token/verify', h(async (req, res) => {
+  const o = await orderByToken(req.params.token);
+  const d = z.object({ razorpay_order_id: z.string(), razorpay_payment_id: z.string(), razorpay_signature: z.string() }).parse(req.body);
+  if (o.paymentStatus === 'paid') return res.json({ ok: true });
+  const keys = shopKeys(o.business);
+  if (!keys || d.razorpay_order_id !== o.rzpOrderId || !validSignature(keys.keySecret, d.razorpay_order_id, d.razorpay_payment_id, d.razorpay_signature)) {
+    throw new HttpError(400, 'Payment could not be verified. If money was taken, the shop will confirm it.');
+  }
+  await markOrderPaidOnline(o.id, d.razorpay_payment_id);
+  res.json({ ok: true });
+}));
+
 // Order status page for the customer.
 router.get('/order/:token', h(async (req, res) => {
   const token = String(req.params.token || '');
   if (!/^[a-f0-9]{32}$/.test(token)) throw new HttpError(404, 'Order not found');
-  const o = await prisma.shopOrder.findUnique({ where: { token }, include: { items: true, business: true } });
+  let o = await prisma.shopOrder.findUnique({ where: { token }, include: { items: true, business: true } });
   if (!o) throw new HttpError(404, 'Order not found');
+  // Paid online but the page closed before confirming? Check with Razorpay.
+  if (o.rzpOrderId && o.paymentStatus !== 'paid') {
+    const keys = shopKeys(o.business);
+    const p = keys ? await capturedPayment(keys, o.rzpOrderId).catch(() => null) : null;
+    if (p && p.amount === Math.round(num(o.total) * 100)) {
+      await markOrderPaidOnline(o.id, p.id);
+      o = await prisma.shopOrder.findUnique({ where: { token }, include: { items: true, business: true } });
+    }
+  }
   const b = o.business;
   const upi = b.upiId && o.paymentStatus !== 'paid' && o.status !== 'cancelled'
     ? `upi://pay?pa=${encodeURIComponent(b.upiId)}&pn=${encodeURIComponent(b.name)}&am=${num(o.total).toFixed(2)}&cu=INR&tn=${encodeURIComponent(o.number)}`
@@ -335,7 +397,8 @@ router.get('/order/:token', h(async (req, res) => {
     order: {
       number: o.number, kind: o.kind, guests: o.guests, status: o.status, name: o.name, phone: o.phone, address: o.address, note: o.note,
       fulfilment: o.fulfilment, preferredAt: o.preferredAt, subtotal: o.subtotal, discount: o.discount, memberNote: o.memberNote, taxTotal: o.taxTotal, deliveryFee: o.deliveryFee,
-      total: o.total, paymentStatus: o.paymentStatus, createdAt: o.createdAt,
+      total: o.total, paymentStatus: o.paymentStatus, paymentMode: o.paymentMode, payChoice: o.payChoice, createdAt: o.createdAt,
+      canPayOnline: o.kind === 'order' && o.paymentStatus !== 'paid' && o.status !== 'cancelled' && Boolean(b.allowOnlinePay && shopKeys(b)),
       items: o.items.map((i) => ({ name: i.name, qty: i.qty, unit: i.unit, lineTotal: r2(num(i.amount) + num(i.taxAmount)) })),
     },
     shop: { ...publicBusiness(b), upiLink: upi, upiId: upi ? b.upiId : null },

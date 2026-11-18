@@ -6,6 +6,52 @@ import ImageUpload from '../components/ImageUpload.jsx';
 
 const COLORS = ['#3730A3', '#C2410C', '#0F766E', '#BE185D', '#1D4ED8', '#7C2D12', '#111827'];
 
+// Online payment (Razorpay) + cash on delivery.
+function PaymentsCard({ initial }) {
+  const [p, setP] = useState({ allowOnlinePay: initial.allowOnlinePay, allowCod: initial.allowCod, rzpKeyId: initial.rzpKeyId, rzpKeySecret: '' });
+  const [info, setInfo] = useState(initial);
+  const [msg, setMsg] = useState('');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const save = async (extra = {}) => {
+    setBusy(true);
+    setErr('');
+    setMsg('');
+    try {
+      const r = await api('/shop-admin/payments', { method: 'PUT', body: { ...p, ...extra } });
+      setInfo(r.settings);
+      setP({ allowOnlinePay: r.settings.allowOnlinePay, allowCod: r.settings.allowCod, rzpKeyId: r.settings.rzpKeyId, rzpKeySecret: '' });
+      setMsg('Saved ✓');
+    } catch (x) {
+      setErr(x.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="card p-5 flex flex-col gap-4">
+      <h2 className="font-bold text-lg">💳 Payments – online shop</h2>
+      <ErrorBox>{err}</ErrorBox>
+      <label className="flex items-start gap-3"><input type="checkbox" className="w-5 h-5 mt-0.5 accent-brand" checked={p.allowOnlinePay} onChange={(e) => setP({ ...p, allowOnlinePay: e.target.checked })} />
+        <span><b>Online payment (UPI / Card / Netbanking)</b><span className="block text-xs text-muted">Customer order chesetappude Razorpay lo pay chestaru, order automatic ga "Paid" avtundi.</span></span></label>
+      <label className="flex items-start gap-3"><input type="checkbox" className="w-5 h-5 mt-0.5 accent-brand" checked={p.allowCod} onChange={(e) => setP({ ...p, allowCod: e.target.checked })} />
+        <span><b>Cash on delivery / Pay at shop</b><span className="block text-xs text-muted">Order teesukune appudu cash / UPI.</span></span></label>
+      {info.platformTest && !info.rzpSecretSaved && (
+        <p className="text-sm bg-amber-50 border border-amber-200 rounded-xl p-3">🧪 <b>Test mode:</b> mee keys lekapoyina BusinessMithra test keys tho online payment try cheyyochu. Test lo real money povu – Razorpay test UPI <code>success@razorpay</code> leda test card vaadandi.</p>
+      )}
+      <div className="grid sm:grid-cols-2 gap-4">
+        <Field label="Razorpay Key ID" id="rz-id" hint="Razorpay Dashboard → Account & Settings → API Keys"><input id="rz-id" className="input" value={p.rzpKeyId} onChange={(e) => setP({ ...p, rzpKeyId: e.target.value.trim() })} placeholder="rzp_live_…" autoComplete="off" /></Field>
+        <Field label="Razorpay Key Secret" id="rz-sec" hint={info.rzpSecretSaved ? 'Saved ✓ (marchalante kotha secret ivvandi)' : 'Dabbulu direct ga mee bank ki vastayi'}><input id="rz-sec" type="password" className="input" value={p.rzpKeySecret} onChange={(e) => setP({ ...p, rzpKeySecret: e.target.value.trim() })} placeholder={info.rzpSecretSaved ? '••••••••' : ''} autoComplete="new-password" /></Field>
+      </div>
+      <div className="flex flex-wrap gap-3 items-center">
+        <button type="button" className="btn-primary" disabled={busy} onClick={() => save()}>{busy ? 'Checking…' : 'Save payments'}</button>
+        {info.rzpSecretSaved && <button type="button" className="btn-ghost text-red-700" disabled={busy} onClick={() => window.confirm('Remove Razorpay keys?') && save({ removeKeys: true, rzpKeyId: '', rzpKeySecret: '' })}>Remove keys</button>}
+        {msg && <span className="text-sm font-semibold text-green-800">{msg}</span>}
+      </div>
+    </section>
+  );
+}
+
 export default function ShopSettings() {
   const [f, setF] = useState(null);
   const [err, setErr] = useState('');
@@ -114,6 +160,7 @@ export default function ShopSettings() {
         </div>
       </section>
 
+      <PaymentsCard initial={f} />
       <section className="card p-5 flex flex-col gap-4">
         <div>
           <h2 className="text-lg font-bold">🌐 Mee own website domain (optional)</h2>

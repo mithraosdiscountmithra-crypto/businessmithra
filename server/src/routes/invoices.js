@@ -18,7 +18,7 @@ const include = {
   payments: { orderBy: { date: 'asc' }, include: { account: { select: { id: true, name: true } } } },
 };
 
-export const MODES = ['cash', 'upi', 'card', 'bank', 'cheque'];
+export const MODES = ['cash', 'upi', 'card', 'bank', 'cheque', 'online'];
 
 const paymentSchema = z.object({
   amount: z.coerce.number().positive('Amount must be more than 0'),

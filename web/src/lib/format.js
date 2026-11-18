@@ -60,7 +60,7 @@ export function amountInWords(amount) {
 }
 
 export const STAGE_LABEL = { new: 'New Lead', contacted: 'Contacted', quotation: 'Quotation Sent', won: 'Won', lost: 'Lost' };
-export const MODE_LABEL = { cash: 'Cash', upi: 'UPI', card: 'Card', bank: 'Bank transfer', cheque: 'Cheque' };
+export const MODE_LABEL = { cash: 'Cash', upi: 'UPI', card: 'Card', bank: 'Bank transfer', cheque: 'Cheque', online: 'Online (Razorpay)' };
 export const GST_RATES = [0, 0.1, 0.25, 3, 5, 12, 18, 28];
 export const SOURCES = ['Walk-in', 'Phone call', 'WhatsApp', 'Instagram', 'Facebook', 'Website', 'Referral', 'Other'];
 

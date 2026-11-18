@@ -10,6 +10,7 @@ import { num, r2 } from '../lib/money.js';
 import { accessState, addPeriod, clearPlanCache, getPlans } from '../lib/plans.js';
 import { MODULES } from '../lib/constants.js';
 import { HttpError } from '../middleware/auth.js';
+import { activateRequest } from '../lib/subscription.js';
 import { clearDomainCache, normalizeDomain } from '../lib/domains.js';
 import { addRenderDomain, autoDomainConfig, removeRenderDomain, setHostingerDns, verifyRenderDomain } from '../lib/autoDomain.js';
 
@@ -246,7 +247,7 @@ router.post('/businesses/:id/domain/check', h(async (req, res) => {
 router.get('/requests', h(async (req, res) => {
   const status = String(req.query.status || 'pending');
   const requests = await prisma.subscriptionRequest.findMany({
-    where: status === 'all' ? {} : { status },
+    where: status === 'all' ? { status: { not: 'awaiting_payment' } } : { status },
     include: { business: { select: { id: true, name: true, city: true, phone: true, plan: true } } },
     orderBy: { createdAt: status === 'pending' ? 'asc' : 'desc' },
     take: 300,
@@ -259,32 +260,7 @@ router.post('/requests/:id/approve', h(async (req, res) => {
   if (!r) throw new HttpError(404, 'Request not found');
   if (r.status !== 'pending') throw new HttpError(400, 'This request is already decided');
   const amount = req.body?.amount !== undefined && req.body.amount !== '' ? Math.max(0, Number(req.body.amount)) : num(r.amount);
-  const b = r.business;
-  // Renewing the same paid plan early adds time on top; otherwise it starts today.
-  const stillActive = b.plan === r.planCode && b.planEndsAt && new Date(b.planEndsAt) > new Date();
-  const from = stillActive ? new Date(b.planEndsAt) : new Date();
-  const till = r.planCode === 'free' ? null : addPeriod(from, r.cycle);
-  await prisma.$transaction([
-    prisma.subscriptionRequest.update({
-      where: { id: r.id },
-      data: { status: 'approved', amount, decidedAt: new Date(), validFrom: from, validTill: till, adminNote: req.body?.adminNote ? String(req.body.adminNote).slice(0, 500) : null },
-    }),
-    prisma.business.update({
-      where: { id: b.id },
-      data: r.planCode === 'free' ? { plan: 'free', planEndsAt: null, planCycle: null } : { plan: r.planCode, planCycle: r.cycle, planEndsAt: till },
-    }),
-  ]);
-  // Switch on the modules this plan allows (owner can still turn them off).
-  const plan = (await getPlans()).find((p) => p.code === r.planCode);
-  if (plan) {
-    for (const m of plan.modules) {
-      await prisma.businessModule.upsert({
-        where: { businessId_module: { businessId: b.id, module: m } },
-        update: {},
-        create: { businessId: b.id, module: m, enabled: true },
-      });
-    }
-  }
+  const till = await activateRequest(r, { amount, adminNote: req.body?.adminNote });
   res.json({ ok: true, validTill: till });
 }));
 

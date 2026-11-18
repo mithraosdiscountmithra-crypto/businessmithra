@@ -5,6 +5,7 @@ import { fmtDate, fmtDateTime, inr } from '../../lib/format.js';
 import UpiPay from '../../components/UpiPay.jsx';
 import { hostShop } from '../../lib/hostShop.js';
 import { InstallButton } from '../../lib/install.jsx';
+import { payWithRazorpay } from '../../lib/razorpay.js';
 import { addOrderToken, clearMe, getMe, getOrderTokens, getShopToken, setMe, setShopToken } from '../../lib/shopDevice.js';
 
 const CART_KEY = (slug) => `bm_cart_${slug}`;
@@ -195,6 +196,7 @@ export default function Storefront() {
   const memberOk = Boolean(benefits && getShopToken() && me?.phone === form.phone.trim());
   const fee = form.fulfilment === 'delivery' && !(memberOk && benefits.freeDelivery) ? shop?.deliveryFee || 0 : 0;
   const memberDisc = memberOk && benefits.discountPct ? Math.round(itemsTotal * benefits.discountPct) / 100 : 0;
+  const [payChoice, setPayChoice] = useState('');
   const [couponIn, setCouponIn] = useState('');
   const [coupon, setCoupon] = useState(null);
   const [couponErr, setCouponErr] = useState('');
@@ -342,6 +344,7 @@ export default function Storefront() {
         name: form.name, phone: form.phone, address: form.address, note: form.note,
         fulfilment: kind === 'order' ? form.fulfilment : 'pickup',
         couponCode: kind === 'order' && coupon ? coupon.code : null,
+        payChoice: kind === 'order' ? (payChoice || (shop.cod ? 'cod' : 'online')) : 'cod',
         guests: kind === 'table' ? Number(form.guests) : null,
         ...(kind === 'order' && form.fulfilment === 'delivery' ? { lat: loc?.lat ?? null, lng: loc?.lng ?? null, landmark, saveAddress: saveAddr, addressLabel: addrLabel } : {}),
         preferredAt: form.preferredAt ? new Date(form.preferredAt).toISOString() : '',
@@ -358,6 +361,13 @@ export default function Storefront() {
         lng: delivered ? loc?.lng ?? null : me?.lng ?? null,
       });
       if (kind === 'order') { setCart({}); setCoupon(null); setCouponIn(''); }
+      if (r.pay) {
+        // Online payment: open Razorpay now. If they close it, the order page shows "Pay now".
+        try {
+          const p = await payWithRazorpay(r.pay);
+          await api(`/shop/order/${r.token}/verify`, { method: 'POST', body: p });
+        } catch { /* order is saved; payment can be finished from the order page */ }
+      }
       navigate(`/o/${r.token}`);
     } catch (x) {
       setFormErr(x.message);
@@ -637,6 +647,20 @@ export default function Storefront() {
               </fieldset>
             )}
             <div><label className="label" htmlFor="s-note">Note (optional)</label><input id="s-note" className="input" value={form.note} onChange={setF('note')} placeholder="Size, colour, timing…" /></div>
+            {shop.onlinePay && (
+              <fieldset className="flex flex-col gap-2">
+                <legend className="label">Payment</legend>
+                {[['online', '💳 Pay online now', 'UPI · Card · Netbanking'], ...(shop.cod ? [['cod', form.fulfilment === 'delivery' ? '💵 Cash on delivery' : '💵 Pay at shop', 'Order teesukune appudu pay cheyyandi']] : [])].map(([k, l, sub]) => {
+                  const on = (payChoice || (shop.cod ? 'cod' : 'online')) === k;
+                  return (
+                    <label key={k} className="flex items-center gap-3 rounded-xl border-2 p-3 cursor-pointer" style={{ borderColor: on ? color : '#E5E7EB' }}>
+                      <input type="radio" name="paychoice" className="w-5 h-5" checked={on} onChange={() => setPayChoice(k)} style={{ accentColor: color }} />
+                      <span><b className="block text-sm">{l}</b><span className="text-xs text-gray-600">{sub}</span></span>
+                    </label>
+                  );
+                })}
+              </fieldset>
+            )}
             <div className="flex flex-col gap-1">
               <label className="label" htmlFor="s-cpn">Coupon code</label>
               <div className="flex gap-2">
@@ -657,7 +681,7 @@ export default function Storefront() {
             {shop.minOrder > 0 && itemsTotal < shop.minOrder && <p className="text-sm font-semibold text-orange-800">Minimum order {inr(shop.minOrder)}. Inka {inr(shop.minOrder - itemsTotal)} add cheyyandi.</p>}
             {formErr && <p className="error-box" role="alert">{formErr}</p>}
             <button type="submit" disabled={busy || (shop.minOrder > 0 && itemsTotal < shop.minOrder)} className="h-14 rounded-2xl text-white font-bold text-base disabled:opacity-60" style={{ background: color }}>
-              {busy ? 'Please wait…' : cta('Place order')}
+              {busy ? 'Please wait…' : (payChoice || (shop.cod ? 'cod' : 'online')) === 'online' && shop.onlinePay ? `Pay ${inr(Math.round(itemsTotal - memberDisc - couponOff + fee))} & place order` : cta('Place order')}
             </button>
             <p className="text-xs text-center text-muted">Order ayyaka shop vaallu confirm chestaru.{shop.upi ? ' UPI tho ventane pay cheyyochu.' : ''}</p>
           </form>

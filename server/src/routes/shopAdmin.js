@@ -9,6 +9,7 @@ import { HttpError, requireAuth, requireOwner, requirePermission } from '../midd
 import { defaultAccountId, MODES, recalcInvoice } from './invoices.js';
 import { clearDomainCache, normalizeDomain } from '../lib/domains.js';
 import { applyLines, reverseRef } from '../lib/stock.js';
+import { checkKeys, isTestKey, platformKeys, sealSecret, shopKeys } from '../lib/razorpay.js';
 
 const router = Router();
 router.use(requireAuth());
@@ -31,6 +32,8 @@ const shopFields = (b) => ({
   allowPickup: b.allowPickup, allowDelivery: b.allowDelivery, deliveryFee: num(b.deliveryFee), minOrder: num(b.minOrder), allowBooking: b.allowBooking,
   allowTable: b.allowTable, shopLat: b.shopLat, shopLng: b.shopLng, shopMapUrl: b.shopMapUrl || '',
   customDomain: b.customDomain || '', customDomainStatus: b.customDomainStatus || null,
+  allowOnlinePay: b.allowOnlinePay, allowCod: b.allowCod, rzpKeyId: b.rzpKeyId || '', rzpSecretSaved: Boolean(b.rzpKeySecret),
+  onlineReady: Boolean(shopKeys(b)), platformTest: isTestKey(platformKeys()),
 });
 
 const url = z.string().trim().max(500).refine((v) => v === '' || /^https:\/\//.test(v), 'Image link must start with https://').transform((v) => v || null);
@@ -87,6 +90,37 @@ router.put('/settings', requireOwner, h(async (req, res) => {
   if (dup) throw new HttpError(409, 'This shop link is already taken. Try another.');
   const b = await prisma.business.update({ where: { id: req.businessId }, data: d });
   await logActivity(req.businessId, req.user.id, 'update', 'shop', b.id);
+  res.json({ settings: shopFields(b) });
+}));
+
+// Online payment (Razorpay) + cash on delivery choices for the shop.
+router.put('/payments', requireOwner, h(async (req, res) => {
+  const d = z.object({
+    allowOnlinePay: z.boolean(),
+    allowCod: z.boolean(),
+    rzpKeyId: z.string().trim().max(60).optional().nullable(),
+    rzpKeySecret: z.string().trim().max(100).optional().nullable(),
+    removeKeys: z.boolean().optional(),
+  }).parse(req.body);
+  if (!d.allowOnlinePay && !d.allowCod) throw new HttpError(400, 'Keep at least one: online payment or cash on delivery');
+  const data = { allowOnlinePay: d.allowOnlinePay, allowCod: d.allowCod };
+  if (d.removeKeys) Object.assign(data, { rzpKeyId: null, rzpKeySecret: null });
+  else if (d.rzpKeyId || d.rzpKeySecret) {
+    if (!/^rzp_(test|live)_[A-Za-z0-9]+$/.test(d.rzpKeyId || '')) throw new HttpError(400, 'Key ID should look like rzp_live_xxxxx or rzp_test_xxxxx');
+    const ex = await prisma.business.findUnique({ where: { id: req.businessId } });
+    if (!d.rzpKeySecret && !ex.rzpKeySecret) throw new HttpError(400, 'Enter the Key Secret');
+    if (d.rzpKeySecret) {
+      await checkKeys({ keyId: d.rzpKeyId, keySecret: d.rzpKeySecret }).catch(() => { throw new HttpError(400, 'These Razorpay keys did not work. Check Key ID and Key Secret.'); });
+      data.rzpKeySecret = sealSecret(d.rzpKeySecret);
+    }
+    data.rzpKeyId = d.rzpKeyId;
+  }
+  const b = await prisma.business.update({ where: { id: req.businessId }, data });
+  if (b.allowOnlinePay && !shopKeys(b)) {
+    await prisma.business.update({ where: { id: b.id }, data: { allowOnlinePay: false, allowCod: true } });
+    throw new HttpError(400, 'Add your Razorpay keys first to take online payments');
+  }
+  await logActivity(req.businessId, req.user.id, 'update', 'shop_payments', b.id);
   res.json({ settings: shopFields(b) });
 }));
 

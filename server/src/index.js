@@ -31,6 +31,9 @@ import purchaseRoutes from './routes/purchases.js';
 import creditNoteRoutes from './routes/creditNotes.js';
 import marketingRoutes, { runBirthdayWishes } from './routes/marketing.js';
 import hrRoutes from './routes/hr.js';
+import { validWebhook } from './lib/razorpay.js';
+import { markOrderPaidOnline } from './lib/shopPay.js';
+import { activateRequest } from './lib/subscription.js';
 import { Prisma } from '@prisma/client';
 import { prisma } from './lib/prisma.js';
 import { shopForHost } from './lib/domains.js';
@@ -53,12 +56,31 @@ app.use(
         styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
         fontSrc: ["'self'", 'https://fonts.gstatic.com'],
         imgSrc: ["'self'", 'data:', 'https:'],
-        scriptSrc: ["'self'"],
-        connectSrc: ["'self'", 'https://api.cloudinary.com'],
+        scriptSrc: ["'self'", 'https://checkout.razorpay.com'],
+        connectSrc: ["'self'", 'https://api.cloudinary.com', 'https://api.razorpay.com', 'https://lumberjack.razorpay.com'],
+        frameSrc: ["'self'", 'https://api.razorpay.com', 'https://checkout.razorpay.com'],
       },
     },
   })
 );
+// Razorpay tells us about payments here (needs the raw body to check the signature).
+app.post('/api/razorpay/webhook', express.raw({ type: '*/*', limit: '200kb' }), async (req, res) => {
+  try {
+    if (!validWebhook(req.body, req.get('x-razorpay-signature'))) return res.status(400).json({ error: 'bad signature' });
+    const evt = JSON.parse(req.body.toString('utf8'));
+    const p = evt?.payload?.payment?.entity;
+    if (p && ['payment.captured', 'order.paid'].includes(evt.event)) {
+      const o = await prisma.shopOrder.findFirst({ where: { rzpOrderId: p.order_id } });
+      if (o && p.amount === Math.round(Number(o.total) * 100)) await markOrderPaidOnline(o.id, p.id);
+      const r = await prisma.subscriptionRequest.findFirst({ where: { rzpOrderId: p.order_id, status: 'awaiting_payment' } });
+      if (r && p.amount === Math.round(Number(r.amount) * 100)) await activateRequest(r, { paymentMode: 'online', reference: p.id });
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('razorpay webhook', e.message);
+    res.status(500).json({ error: 'failed' });
+  }
+});
 app.use(express.json({ limit: '1mb' }));
 // Money columns come from the database as Decimal objects; send them to the web app as plain numbers.
 app.set('json replacer', function replacer(key, value) {
