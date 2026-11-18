@@ -16,6 +16,7 @@ import GstReturns from './pages/accounts/GstReturns.jsx';
 import Campaigns from './pages/mk/Campaigns.jsx';
 import Coupons from './pages/mk/Coupons.jsx';
 import Wishes from './pages/mk/Wishes.jsx';
+import PostMaker from './pages/mk/PostMaker.jsx';
 import Employees from './pages/hr/Employees.jsx';
 import Attendance from './pages/hr/Attendance.jsx';
 import Salary from './pages/hr/Salary.jsx';
@@ -141,6 +142,7 @@ export default function App() {
       <Route path="/accounts/gst-returns" element={<Private module="accounts"><GstReturns /></Private>} />
       <Route path="/mk" element={<Navigate to="/mk/campaigns" replace />} />
       <Route path="/mk/campaigns" element={<Private module="marketing"><Campaigns /></Private>} />
+      <Route path="/mk/posts" element={<Private module="marketing"><PostMaker /></Private>} />
       <Route path="/mk/coupons" element={<Private module="marketing"><Coupons /></Private>} />
       <Route path="/mk/wishes" element={<Private module="marketing"><Wishes /></Private>} />
       <Route path="/hr" element={<Navigate to="/hr/attendance" replace />} />

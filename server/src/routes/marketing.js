@@ -160,6 +160,27 @@ router.put('/wishes', requirePermission('marketing', 'edit'), h(async (req, res)
   res.json({ ok: true });
 }));
 
+// Everything the post maker needs: shop branding, items with photos, live coupons.
+router.get('/post-kit', requirePermission('marketing', 'view'), h(async (req, res) => {
+  const [b, items, coupons] = await Promise.all([
+    prisma.business.findUnique({ where: { id: req.businessId } }),
+    prisma.item.findMany({ where: { businessId: req.businessId, active: true }, orderBy: { createdAt: 'desc' }, take: 200 }),
+    prisma.coupon.findMany({ where: { businessId: req.businessId, active: true }, orderBy: { createdAt: 'desc' }, take: 20 }),
+  ]);
+  const withTax = (p, t) => Math.round(Number(p) * (1 + Number(t) / 100));
+  res.json({
+    shop: {
+      name: b.name, phone: b.phone, city: b.city, tagline: b.shopTagline, logo: b.shopLogo, cover: b.shopCover, color: b.shopColor || '#3730A3',
+      slug: b.shopEnabled ? b.slug : null, domain: b.customDomain && b.customDomainStatus === 'live' ? b.customDomain : null, type: b.type,
+    },
+    items: items.map((it) => {
+      const v = Array.isArray(it.variants) && it.variants.length ? it.variants[0] : null;
+      return { id: it.id, name: it.name, image: it.images?.[0] || null, price: withTax(v ? v.price : it.price, it.taxRate), mrp: it.mrp ? Number(it.mrp) : v?.mrp ? Number(v.mrp) : null, from: Boolean(v), category: it.category };
+    }),
+    coupons: coupons.map((c) => ({ code: c.code, label: c.type === 'flat' ? `₹${Number(c.value)} OFF` : `${Number(c.value)}% OFF`, minOrder: Number(c.minOrder), validTill: c.validTill })),
+  });
+}));
+
 export default router;
 
 // Runs once a day (after 9 AM IST): WhatsApp birthday wishes for shops that turned it on.

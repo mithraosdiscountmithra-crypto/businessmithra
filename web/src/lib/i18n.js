@@ -12,7 +12,7 @@ const TE = {
   Quotations: 'కొటేషన్లు', Invoices: 'ఇన్వాయిస్‌లు', Returns: 'రిటర్న్స్', 'Items & Services': 'ఐటమ్స్ & సర్వీసులు',
   Overview: 'సారాంశం', Expenses: 'ఖర్చులు', 'Day Book': 'డే బుక్', 'P&L · GST · Cash flow': 'లాభనష్టాలు · GST · నగదు',
   Stock: 'స్టాక్', Purchases: 'కొనుగోళ్లు', 'Purchase Returns': 'కొనుగోలు రిటర్న్స్', Suppliers: 'సప్లయర్లు', 'Barcode Labels': 'బార్‌కోడ్ లేబుల్స్',
-  Campaigns: 'క్యాంపెయిన్లు', Coupons: 'కూపన్లు', 'Birthday Wishes': 'పుట్టినరోజు శుభాకాంక్షలు',
+  Campaigns: 'క్యాంపెయిన్లు', 'Social Posts': 'సోషల్ పోస్టులు', Coupons: 'కూపన్లు', 'Birthday Wishes': 'పుట్టినరోజు శుభాకాంక్షలు',
   Attendance: 'హాజరు', Salary: 'జీతాలు', Employees: 'ఉద్యోగులు',
   'Total sales': 'మొత్తం అమ్మకాలు', Collected: 'వసూలైంది', 'Average bill': 'సగటు బిల్', 'Total pending (all time)': 'మొత్తం బాకీ',
   'Items tracked': 'ట్రాక్ చేస్తున్న ఐటమ్స్', 'Stock value (cost)': 'స్టాక్ విలువ', 'Low stock': 'తక్కువ స్టాక్',

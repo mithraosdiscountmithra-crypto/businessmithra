@@ -89,6 +89,7 @@ export const OPS_NAV = [
 
 export const MK_NAV = [
   { to: '/mk/campaigns', label: 'Campaigns' },
+  { to: '/mk/posts', label: 'Social Posts' },
   { to: '/mk/coupons', label: 'Coupons' },
   { to: '/mk/wishes', label: 'Birthday Wishes' },
 ];
