@@ -25,6 +25,14 @@ export async function payWithRazorpay(pay) {
       image: pay.image,
       prefill: pay.prefill,
       theme: { color: pay.color || '#3730A3' },
+      // Show UPI first (GPay / PhonePe / Paytm / QR in live mode), then the rest.
+      config: {
+        display: {
+          blocks: { upi: { name: 'Pay with UPI', instruments: [{ method: 'upi' }] } },
+          sequence: ['block.upi'],
+          preferences: { show_default_blocks: true },
+        },
+      },
       handler: (r) => resolve(r),
       modal: { ondismiss: () => reject(Object.assign(new Error('Payment cancel chesaru'), { dismissed: true })), confirm_close: true },
     });
