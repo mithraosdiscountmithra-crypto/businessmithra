@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../api.js';
 import { fmtDate, fmtDateTime, inr } from '../../lib/format.js';
@@ -66,6 +66,8 @@ function VariantChips({ it, value, onChange, color }) {
   );
 }
 
+const menuLabelFor = (shop) => (/restaurant|food|cafe|hotel|bakery|sweet|tiffin/i.test(shop.type || '') ? 'Menu' : 'Products');
+
 const firstInStock = (it) => (it.variants.find((v) => v.inStock) || it.variants[0])?.id || null;
 
 function ItemCard({ it, cart, color, stype, onAdd, onDec, onBook, onAsk, onOpen }) {
@@ -79,7 +81,7 @@ function ItemCard({ it, cart, color, stype, onAdd, onDec, onBook, onAsk, onOpen 
   const img = it.images[0];
   const off = mrp && mrp > price ? Math.round(((mrp - price) / mrp) * 100) : 0;
   return (
-    <article className="bg-white rounded-2xl border border-gray-200 overflow-hidden flex flex-col shadow-sm hover:shadow-md transition-shadow">
+    <article className="bg-white rounded-2xl border border-gray-200 overflow-hidden flex flex-col shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition">
       <button type="button" onClick={onOpen} className="relative aspect-square bg-gray-100 block w-full" aria-label={`View ${it.name}`}>
         <img src={img || itemArt(it.name, it.category, stype, color)} alt={it.name} loading="lazy" className="w-full h-full object-cover" />
         {off > 0 && <span className="absolute top-2 left-2 text-xs font-extrabold bg-green-700 text-white px-2 py-1 rounded-lg">{off}% OFF</span>}
@@ -87,6 +89,7 @@ function ItemCard({ it, cart, color, stype, onAdd, onDec, onBook, onAsk, onOpen 
       </button>
       <div className="p-3 flex flex-col gap-1.5 flex-1">
         <h3 className="text-sm font-bold leading-snug line-clamp-2">{it.name}</h3>
+        {it.description && <p className="text-xs text-gray-500 line-clamp-1">{it.description}</p>}
         {it.variants.length > 0 && <VariantChips it={it} value={vSel} onChange={setVSel} color={color} />}
         <div className="flex items-baseline gap-2">
           <span className="font-extrabold">{inr(price)}</span>
@@ -196,7 +199,7 @@ export default function Storefront() {
   const items = data?.items || [];
   const byId = useMemo(() => Object.fromEntries(items.map((i) => [i.id, i])), [items]);
   const categories = useMemo(() => [...new Set(items.map((i) => i.category).filter(Boolean))], [items]);
-  const shown = items.filter((i) => (!cat || i.category === cat) && (!q || i.name.toLowerCase().includes(q.toLowerCase())));
+  const shown = items.filter((i) => !q || `${i.name} ${i.category || ''} ${i.description || ''}`.toLowerCase().includes(q.toLowerCase()));
   const cartLines = Object.entries(cart).flatMap(([key, n]) => {
     const [id, vId] = key.split(':');
     const it = byId[id];
@@ -427,8 +430,43 @@ export default function Storefront() {
     }
   };
 
+  // Menu sections: highlight the category on screen, show "back to top" after scrolling.
+  const [activeCat, setActiveCat] = useState('');
+  const [showTop, setShowTop] = useState(false);
+  const chipBar = useRef(null);
+  useEffect(() => {
+    if (!data) return undefined;
+    const secs = [...document.querySelectorAll('[data-cat-section]')];
+    if (!secs.length) return undefined;
+    const io = new IntersectionObserver((entries) => {
+      const vis = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+      if (vis) setActiveCat(vis.target.getAttribute('data-cat-section'));
+    }, { rootMargin: '-140px 0px -60% 0px' });
+    secs.forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, [data, q]);
+  useEffect(() => {
+    const el = chipBar.current?.querySelector(`[data-chip="${CSS.escape(activeCat)}"]`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+  }, [activeCat]);
+  useEffect(() => {
+    const onScroll = () => setShowTop(window.scrollY > 900);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
   if (err) return <div className="min-h-screen flex items-center justify-center p-6 text-center"><div><p className="text-xl font-bold">Shop not found</p><p className="text-muted mt-1">Ee link lo shop ledu leda temporary ga close ayyindi.</p></div></div>;
-  if (!data) return <div className="min-h-screen flex items-center justify-center text-muted">Loading shop…</div>;
+  if (!data) {
+    return (
+      <div className="min-h-screen bg-[#F6F6F8]" aria-busy="true" aria-label="Loading shop">
+        <div className="h-16 bg-white border-b border-gray-200" />
+        <div className="h-72 bg-gradient-to-br from-gray-200 to-gray-300 animate-pulse" />
+        <div className="max-w-6xl mx-auto px-4 pt-8 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          {Array.from({ length: 8 }, (_, i) => <div key={i} className="rounded-2xl bg-white border border-gray-200 overflow-hidden"><div className="aspect-square bg-gray-200 animate-pulse" /><div className="p-3 flex flex-col gap-2"><div className="h-3 w-3/4 bg-gray-200 rounded animate-pulse" /><div className="h-3 w-1/3 bg-gray-200 rounded animate-pulse" /></div></div>)}
+        </div>
+      </div>
+    );
+  }
 
   const verified = Boolean(me && getShopToken() && me.phone === form.phone.trim());
   const ready = Boolean(me && (!shop.otp || verified) && me.phone === form.phone.trim());
@@ -454,6 +492,19 @@ export default function Storefront() {
     </>
   );
 
+  const card = (it) => (
+    <ItemCard
+      key={it.id} it={it} cart={cart} color={color} stype={shop.type}
+      onAdd={add} onDec={dec}
+      onBook={shop.allowBooking ? () => setSheet({ type: 'book', item: it }) : null}
+      onAsk={() => { setSent(false); setSheet({ type: 'ask', item: it }); }}
+      onOpen={() => setSheet({ type: 'item', item: it })}
+    />
+  );
+  const groups = [
+    ...categories.map((c, i) => ({ name: c, id: `cat-${i}`, items: items.filter((it) => it.category === c) })),
+    ...(items.some((it) => !it.category) ? [{ name: categories.length ? 'More' : menuLabelFor(shop), id: 'cat-more', items: items.filter((it) => !it.category) }] : []),
+  ];
   const foodish = /restaurant|food|cafe|hotel|bakery|sweet|tiffin|mess|juice|cloud/i.test(shop.type || '');
   // Vendor's own words first; otherwise professional text made from the business details.
   const autoInfo = { name: shop.name, type: shop.type, city: shop.city, categories, allowDelivery: shop.allowDelivery, allowPickup: shop.allowPickup, allowTable: shop.allowTable, allowBooking: shop.allowBooking, onlinePay: shop.onlinePay };
@@ -573,31 +624,51 @@ export default function Storefront() {
           <h2 className="text-2xl sm:text-3xl font-extrabold">{menuLabel}</h2>
           <span className="block h-1.5 w-20 rounded-full mt-2" style={{ background: `linear-gradient(90deg, ${color}, ${color2})` }} aria-hidden="true" />
         </div>
-        <div className="flex flex-col gap-3 sticky top-16 z-20 bg-[#F6F6F8] py-2">
-          <label className="sr-only" htmlFor="shop-q">Search</label>
-          <input id="shop-q" type="search" className="input bg-white" placeholder={`Search in ${shop.name}`} value={q} onChange={(e) => setQ(e.target.value)} />
-          {categories.length > 0 && (
-            <div className="flex gap-2 overflow-x-auto -mx-4 px-4 pb-1">
-              {['', ...categories].map((c) => (
-                <button key={c || 'all'} type="button" aria-pressed={cat === c} onClick={() => setCat(c)} className="h-9 px-4 rounded-full text-sm font-semibold whitespace-nowrap border" style={cat === c ? { background: color, color: '#fff', borderColor: color } : { background: '#fff', borderColor: '#E5E7EB' }}>
-                  {c ? `${emojiFor(c, shop.type)} ${c}` : '✨ All'}
+        <div className="flex flex-col gap-3 sticky top-16 z-20 bg-[#F6F6F8]/95 backdrop-blur py-2 -mx-4 px-4">
+          <div className="relative">
+            <label className="sr-only" htmlFor="shop-q">Search</label>
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" aria-hidden="true">🔍</span>
+            <input id="shop-q" type="search" className="input bg-white pl-11 pr-11 shadow-sm" placeholder={`Search in ${shop.name}`} value={q} onChange={(e) => setQ(e.target.value)} />
+            {q && <button type="button" aria-label="Clear search" onClick={() => setQ('')} className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full hover:bg-gray-100 font-bold text-gray-500">✕</button>}
+          </div>
+          {!q && categories.length > 1 && (
+            <div ref={chipBar} className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
+              {groups.map((g) => (
+                <button key={g.name} type="button" data-chip={g.name} aria-current={activeCat === g.name ? 'true' : undefined}
+                  onClick={() => document.getElementById(g.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                  className="h-9 px-4 rounded-full text-sm font-semibold whitespace-nowrap border transition-colors"
+                  style={activeCat === g.name ? { background: color, color: '#fff', borderColor: color } : { background: '#fff', borderColor: '#E5E7EB' }}>
+                  {emojiFor(g.name, shop.type)} {g.name} <span className="opacity-60 text-xs">{g.items.length}</span>
                 </button>
               ))}
             </div>
           )}
         </div>
-        {shown.length === 0 ? <p className="text-center text-muted py-10">Items levu.</p> : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            {shown.map((it) => (
-              <ItemCard
-                key={it.id} it={it} cart={cart} color={color} stype={shop.type}
-                onAdd={add} onDec={dec}
-                onBook={shop.allowBooking ? () => setSheet({ type: 'book', item: it }) : null}
-                onAsk={() => { setSent(false); setSheet({ type: 'ask', item: it }); }}
-                onOpen={() => setSheet({ type: 'item', item: it })}
-              />
-            ))}
-          </div>
+        {q ? (
+          <>
+            <p className="text-sm text-gray-600">{shown.length} result{shown.length === 1 ? '' : 's'} for "<b>{q}</b>"</p>
+            {shown.length === 0 ? (
+              <div className="text-center py-12 flex flex-col items-center gap-3">
+                <span className="text-5xl" aria-hidden="true">🔎</span>
+                <p className="text-gray-600">"{q}" dorakaledu. Vere peru tho try cheyyandi leda adagandi.</p>
+                <button type="button" onClick={() => { setSent(false); setSheet({ type: 'ask' }); }} className="h-11 px-5 rounded-xl font-bold text-white" style={{ background: color }}>Ask the shop</button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">{shown.map(card)}</div>
+            )}
+          </>
+        ) : items.length === 0 ? <p className="text-center text-muted py-10">Items inka add cheyyaledu.</p> : (
+          groups.map((g) => (
+            <section key={g.name} id={g.id} data-cat-section={g.name} className="scroll-mt-44 flex flex-col gap-3 pt-2">
+              {groups.length > 1 && (
+                <h3 className="text-lg sm:text-xl font-extrabold flex items-center gap-2">
+                  <span className="w-9 h-9 rounded-xl flex items-center justify-center text-lg" style={{ background: tint(color, 0.12) }} aria-hidden="true">{emojiFor(g.name, shop.type)}</span>
+                  {g.name} <span className="text-sm font-semibold text-gray-500">({g.items.length})</span>
+                </h3>
+              )}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">{g.items.map(card)}</div>
+            </section>
+          ))
         )}
         <p className="text-center text-xs text-gray-500 pt-2">Prices include GST</p>
       </main>
@@ -683,6 +754,10 @@ export default function Storefront() {
         <p className="border-t border-white/10 text-center text-xs py-4">© {new Date().getFullYear()} {shop.name} · Powered by BusinessMithra</p>
       </footer>
 
+      {showTop && (
+        <button type="button" aria-label="Back to top" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          className="fixed bottom-24 right-5 z-30 w-12 h-12 rounded-full bg-white border border-gray-200 shadow-lg font-bold text-xl">↑</button>
+      )}
       {/* Floating WhatsApp */}
       {shop.phone && !(cartCount > 0 && (shop.allowPickup || shop.allowDelivery)) && (
         <a href={`https://wa.me/91${shop.phone}`} target="_blank" rel="noreferrer" aria-label="Chat on WhatsApp" className="fixed bottom-5 right-5 z-30 w-14 h-14 rounded-full bg-green-600 text-white text-2xl flex items-center justify-center shadow-xl">💬</a>
