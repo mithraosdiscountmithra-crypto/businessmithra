@@ -493,7 +493,6 @@ export default function Storefront() {
         <div className="absolute inset-0" style={{ backgroundImage: shop.cover ? `url(${shop.cover})` : heroArt(shop.type, color), backgroundSize: 'cover', backgroundPosition: 'center' }} aria-hidden="true" />
         <div className={`absolute inset-0 ${shop.cover ? 'bg-gradient-to-t from-black/80 via-black/45 to-black/25' : 'bg-gradient-to-t from-black/45 via-black/10 to-transparent'}`} aria-hidden="true" />
         <div className="relative max-w-6xl mx-auto px-4 py-16 sm:py-24 text-white flex flex-col gap-4">
-          {shop.logo && <img src={shop.logo} alt={`${shop.name} logo`} className="w-20 h-20 rounded-2xl object-cover border-4 border-white/90 shadow-lg" />}
           <h1 className="text-4xl sm:text-6xl font-extrabold leading-tight max-w-3xl drop-shadow-lg">{shop.name}</h1>
           <p className="text-lg sm:text-xl text-white/95 max-w-2xl drop-shadow">{tagline}</p>
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-white/90">
