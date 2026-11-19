@@ -199,7 +199,8 @@ export default function ShopSettings() {
 
       <section className="card p-5 flex flex-col gap-4">
         <h2 className="text-lg font-bold">🎨 Website design</h2>
-        <p className="text-sm text-muted -mt-2">Mee shop website ki design select chesi Save nokkandi. "Preview" tho save cheyyakunda chudochu.</p>
+        <p className="text-sm text-muted -mt-2">Mee shop website ki design select chesi kindha <b>Save</b> nokkandi. "👁 Preview" tho save cheyyakunda new tab lo chudochu.</p>
+        <a href={`${window.location.origin}/s/${f.slug}?t=${f.shopTemplate || 'classic'}`} target="_blank" rel="noreferrer" className="btn-primary self-start">👁 Selected design preview chudandi</a>
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           {[
               { key: 'classic', thumb: (<div className="h-full flex flex-col"><div className="h-1/2 bg-gradient-to-br from-indigo-500 to-gray-900 p-1.5"><div className="h-1.5 w-10 bg-white rounded" /><div className="h-1 w-14 bg-white/70 rounded mt-1" /></div><div className="flex-1 bg-gray-100 grid grid-cols-3 gap-1 p-1.5">{[0,1,2].map((i) => <div key={i} className="bg-white rounded" />)}</div></div>) },
@@ -215,7 +216,7 @@ export default function ShopSettings() {
                   <div className="aspect-[4/3]" aria-hidden="true">{thumb}</div>
                   <div className="p-2.5"><b className="text-sm block">{on ? '✅ ' : ''}{TEMPLATES[key].name}</b><span className="text-xs text-muted">{TEMPLATES[key].desc}</span></div>
                 </button>
-                {f.slug && <a href={`${link}${link.includes('?') ? '&' : '?'}t=${key}`} target="_blank" rel="noreferrer" className="text-xs font-semibold text-brand px-2.5 pb-2.5">👁 Preview</a>}
+                <a href={`${window.location.origin}/s/${f.slug}?t=${key}`} target="_blank" rel="noreferrer" className="mx-2.5 mb-2.5 mt-auto h-9 rounded-lg border border-line text-sm font-bold flex items-center justify-center gap-1 hover:bg-gray-50">👁 Preview</a>
               </div>
             );
           })}
