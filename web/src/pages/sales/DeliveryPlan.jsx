@@ -104,7 +104,7 @@ function DeliveryMap({ shop, areas, onPick }) {
       if (!live || !box.current) return;
       if (!map.current) {
         map.current = L.map(box.current, { scrollWheelZoom: false });
-        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map.current);
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap contributors', referrerPolicy: 'strict-origin-when-cross-origin' }).addTo(map.current);
       }
       const m = map.current;
       m.eachLayer((l) => { if (!l.getAttribution?.()) m.removeLayer(l); });

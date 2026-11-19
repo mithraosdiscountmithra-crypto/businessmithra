@@ -50,6 +50,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 app.set('trust proxy', 1); // Render sits behind a proxy
 app.use(
   helmet({
+    // OpenStreetMap map tiles need to know which site asks for them.
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
