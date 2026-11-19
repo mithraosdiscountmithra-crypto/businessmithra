@@ -167,6 +167,25 @@ router.get('/orders', requirePermission('sales', 'view'), h(async (req, res) => 
   res.json({ orders, newCount });
 }));
 
+// Delivery planning: open delivery orders with their map points + the shop's location.
+router.get('/delivery-plan', requirePermission('sales', 'view'), h(async (req, res) => {
+  const [b, orders] = await Promise.all([
+    prisma.business.findUnique({ where: { id: req.businessId }, select: { name: true, shopLat: true, shopLng: true, address: true, city: true } }),
+    prisma.shopOrder.findMany({
+      where: { businessId: req.businessId, kind: 'order', fulfilment: 'delivery', status: { in: String(req.query.include || '') === 'new' ? ['new', 'confirmed', 'ready'] : ['confirmed', 'ready'] } },
+      include: { items: true }, orderBy: { createdAt: 'asc' }, take: 200,
+    }),
+  ]);
+  res.json({
+    shop: { name: b.name, lat: b.shopLat, lng: b.shopLng, address: [b.address, b.city].filter(Boolean).join(', ') },
+    orders: orders.map((o) => ({
+      id: o.id, number: o.number, name: o.name, phone: o.phone, address: o.address, lat: o.lat, lng: o.lng, status: o.status,
+      total: o.total, paymentStatus: o.paymentStatus, payChoice: o.payChoice, createdAt: o.createdAt,
+      items: o.items.map((i) => `${i.name} × ${Number(i.qty)}`).join(', '),
+    })),
+  });
+}));
+
 router.get('/orders/count', requirePermission('sales', 'view'), h(async (req, res) => {
   const newCount = await prisma.shopOrder.count({ where: { businessId: req.businessId, status: 'new' } });
   res.json({ newCount });

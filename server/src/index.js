@@ -53,10 +53,10 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+        styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://unpkg.com'],
         fontSrc: ["'self'", 'https://fonts.gstatic.com'],
         imgSrc: ["'self'", 'data:', 'https:'],
-        scriptSrc: ["'self'", 'https://checkout.razorpay.com'],
+        scriptSrc: ["'self'", 'https://checkout.razorpay.com', 'https://unpkg.com'],
         connectSrc: ["'self'", 'https://api.cloudinary.com', 'https://api.razorpay.com', 'https://lumberjack.razorpay.com'],
         frameSrc: ["'self'", 'https://api.razorpay.com', 'https://checkout.razorpay.com', 'https://www.google.com', 'https://maps.google.com'],
       },

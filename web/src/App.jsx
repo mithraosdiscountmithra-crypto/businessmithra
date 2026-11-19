@@ -10,6 +10,7 @@ import Purchases from './pages/ops/Purchases.jsx';
 import Suppliers from './pages/ops/Suppliers.jsx';
 import Returns from './pages/sales/Returns.jsx';
 import POS from './pages/sales/POS.jsx';
+import DeliveryPlan from './pages/sales/DeliveryPlan.jsx';
 import ItemReport from './pages/sales/ItemReport.jsx';
 import CustomerStatement from './pages/sales/CustomerStatement.jsx';
 import GstReturns from './pages/accounts/GstReturns.jsx';
@@ -149,6 +150,7 @@ export default function App() {
       <Route path="/hr/attendance" element={<Private module="hr"><Attendance /></Private>} />
       <Route path="/hr/salary" element={<Private module="hr"><Salary /></Private>} />
       <Route path="/hr/employees" element={<Private module="hr"><Employees /></Private>} />
+      <Route path="/sales/delivery" element={<Private module="sales"><DeliveryPlan /></Private>} />
       <Route path="/pos" element={<Private module="sales"><POS /></Private>} />
       <Route path="/ops/labels" element={<Private module="operations"><Labels /></Private>} />
       <Route path="/ops/suppliers" element={<Private module="operations"><Suppliers /></Private>} />

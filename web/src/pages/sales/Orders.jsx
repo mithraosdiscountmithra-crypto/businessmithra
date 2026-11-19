@@ -77,6 +77,7 @@ export default function Orders() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader title="Sales & Customers" subtitle="Online shop nunchi vachina orders & bookings. Prati 30 seconds ki auto refresh.">
+        <Link className="btn-primary" to="/sales/delivery">🛵 Delivery plan</Link>
         {me.user.isOwner && <Link className="btn-ghost" to="/shop">Shop settings</Link>}
       </PageHeader>
       <SubNav items={SALES_NAV} />
