@@ -490,6 +490,12 @@ model ShopOrderItem {
 }
 
 // WhatsApp OTP login for online-shop customers
+// Phone numbers that passed WhatsApp OTP once – they are not asked again on any shop.
+model VerifiedPhone {
+  phone      String   @id
+  verifiedAt DateTime @default(now())
+}
+
 model OtpCode {
   id        String   @id @default(cuid())
   phone     String

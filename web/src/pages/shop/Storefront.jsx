@@ -274,6 +274,12 @@ export default function Storefront() {
       return true;
     }
     if (!otpStep) {
+      // Number already verified once (any time, any shop)? Don't ask OTP again.
+      const st = await api('/shop/phone-status', { method: 'POST', body: { phone: form.phone.trim() } }).catch(() => ({ verified: false }));
+      if (st.verified) {
+        await finishHello();
+        return true;
+      }
       await sendOtpCode();
       return false;
     }
@@ -488,7 +494,7 @@ export default function Storefront() {
           <p className="text-xs text-muted">+91 {form.phone} ki pampamu · <button type="button" className="underline font-semibold" onClick={() => { setOtpStep(false); setFormErr(''); }}>Number marchandi</button> · <button type="button" className="underline font-semibold" onClick={resendOtp}>Malli pampandi</button></p>
         </div>
       )}
-      {shop.otp && !otpStep && <p className="text-xs text-muted">Order confirm cheyyadaniki WhatsApp lo OTP vastundi. Okkasari chaalu.</p>}
+      {shop.otp && !otpStep && <p className="text-xs text-muted">Kotha number ayithe okkasari matrame WhatsApp lo OTP vastundi.</p>}
     </>
   );
 

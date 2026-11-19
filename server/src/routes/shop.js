@@ -270,6 +270,14 @@ router.post('/me/forget', (_req, res) => {
   res.json({ ok: true });
 });
 
+// Has this mobile number already passed OTP before? Then the customer is not asked again.
+router.post('/phone-status', writeLimiter, h(async (req, res) => {
+  const phoneNo = String(req.body?.phone || '').trim();
+  if (!/^[6-9]\d{9}$/.test(phoneNo)) return res.json({ verified: false });
+  const v = await prisma.verifiedPhone.findUnique({ where: { phone: phoneNo } });
+  res.json({ verified: Boolean(v) });
+}));
+
 // Who is this phone? Lets the shop skip asking name / mobile / OTP again.
 router.get('/me/device', h(async (req, res) => {
   const phoneNo = shopPhone(req);

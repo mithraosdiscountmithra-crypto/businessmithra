@@ -55,6 +55,7 @@ export async function verifyOtp(phone, code) {
     throw new HttpError(400, 'Wrong OTP. Please check and try again.');
   }
   await prisma.otpCode.deleteMany({ where: { phone } });
+  await prisma.verifiedPhone.upsert({ where: { phone }, create: { phone }, update: { verifiedAt: new Date() } });
   return jwt.sign({ phone, scope: 'shop' }, process.env.JWT_SECRET, { expiresIn: '180d', audience: 'shop' });
 }
 
