@@ -566,7 +566,7 @@ export default function Storefront() {
             {(shop.allowPickup || shop.allowDelivery) && <a href="#menu" className="h-12 px-6 rounded-xl font-bold flex items-center bg-white text-gray-900 shadow">🛒 Order online</a>}
             {shop.allowTable && <button type="button" onClick={() => { setFormErr(''); setSheet('table'); }} className="h-12 px-6 rounded-xl font-bold text-white shadow" style={{ background: color }}>🍽️ Book a table</button>}
             {shop.phone && <a href={`https://wa.me/91${shop.phone}`} target="_blank" rel="noreferrer" className="h-12 px-6 rounded-xl font-bold flex items-center bg-green-600 text-white shadow">WhatsApp</a>}
-            {(shop.lat || shop.mapUrl || shop.address || shop.city) && (
+            {(shop.lat || shop.mapUrl) && (
               <a href={dirUrl} target="_blank" rel="noreferrer" className="h-12 px-6 rounded-xl font-bold flex items-center bg-white/15 border border-white/40 text-white backdrop-blur">📍 Directions</a>
             )}
           </div>
@@ -718,7 +718,7 @@ export default function Storefront() {
             {shop.phone && <p className="flex gap-3"><span aria-hidden="true">📞</span><a className="font-semibold" href={`tel:${shop.phone}`}>+91 {shop.phone}</a></p>}
             <div className="flex flex-wrap gap-2 pt-1">
               {shop.phone && <a href={`https://wa.me/91${shop.phone}`} target="_blank" rel="noreferrer" className="h-11 px-4 rounded-xl bg-green-600 text-white font-bold flex items-center">WhatsApp</a>}
-              {(shop.lat || shop.mapUrl || shop.address || shop.city) && <a href={dirUrl} target="_blank" rel="noreferrer" className="h-11 px-4 rounded-xl border border-gray-300 font-bold flex items-center">Get directions</a>}
+              {(shop.lat || shop.mapUrl) && <a href={dirUrl} target="_blank" rel="noreferrer" className="h-11 px-4 rounded-xl border border-gray-300 font-bold flex items-center">Get directions</a>}
               <button type="button" onClick={() => { setSent(false); setSheet({ type: 'ask' }); }} className="h-11 px-4 rounded-xl border border-gray-300 font-bold">Send a message</button>
             </div>
           </div>
