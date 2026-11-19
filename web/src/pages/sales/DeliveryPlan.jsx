@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ErrorBox, PageHeader, useApi } from '../../components/ui.jsx';
 import { inr, waLink } from '../../lib/format.js';
+import { downloadCsv } from '../../lib/csv.js';
 
 // Groups delivery orders by area and gives the shortest-looking route, so one rider covers
 // one area at a time instead of going back and forth.
@@ -154,6 +155,18 @@ export default function DeliveryPlan() {
     return { shop, areas, noGps };
   }, [data, radius]);
 
+  // Excel (CSV) list: area by area, in delivery order.
+  const download = (only) => {
+    const list = only === undefined ? plan.areas.map((a, i) => [a, i]) : [[plan.areas[only], only]];
+    const rows = list.flatMap(([a, ai]) => a.route.map((p, i) => [
+      `Area ${ai + 1}`, a.name || '', i + 1, p.number, p.name, p.phone, p.address || '', p.items,
+      Number(p.total), p.paymentStatus === 'paid' ? 'Paid' : 'Collect', i === 0 && !plan.shop ? '' : fmtKm(p.hop), `https://maps.google.com/?q=${p.lat},${p.lng}`, '',
+    ]));
+    plan.noGps.forEach((p) => rows.push(['No location', '', '', p.number, p.name, p.phone, p.address || '', p.items, Number(p.total), p.paymentStatus === 'paid' ? 'Paid' : 'Collect', '', '', '']));
+    const day = new Date().toISOString().slice(0, 10);
+    downloadCsv(`delivery-${only === undefined ? 'all' : `area-${only + 1}`}-${day}`, ['Area', 'Area name', 'Stop', 'Order', 'Customer', 'Phone', 'Address', 'Items', 'Amount', 'Payment', 'Distance', 'Map link', 'Delivered ✓'], rows);
+  };
+
   const shareArea = (a, idx) => {
     const lines = a.route.map((p, i) => `${i + 1}. ${p.number} – ${p.name} (${p.phone})\n   ${p.address || ''}\n   ${p.paymentStatus === 'paid' ? '✅ Paid' : `💵 Collect ${inr(p.total)}`}\n   📍 https://maps.google.com/?q=${p.lat},${p.lng}`);
     const text = `🛵 Delivery – Area ${idx + 1}${a.name ? ` (${a.name})` : ''}\n${a.route.length} orders\n\n${lines.join('\n\n')}\n\n🗺️ Route: ${mapsRoute(plan.shop, a.route)}`;
@@ -165,9 +178,15 @@ export default function DeliveryPlan() {
       <PageHeader title="🛵 Delivery plan" subtitle="Orders area wise – okka area lo unna orders okkasari deliver cheyyandi">
         <Link to="/sales/orders" className="btn-ghost">← Orders</Link>
         <button type="button" className="btn-ghost" onClick={reload}>↻ Refresh</button>
+        {plan && (plan.areas.length > 0 || plan.noGps.length > 0) && (
+          <>
+            <button type="button" className="btn-primary" onClick={() => download()}>⬇️ Excel (all areas)</button>
+            <button type="button" className="btn-ghost" onClick={() => window.print()}>🖨️ Print / PDF</button>
+          </>
+        )}
       </PageHeader>
       <ErrorBox>{error}</ErrorBox>
-      <div className="flex flex-wrap gap-4 items-center text-sm">
+      <div className="flex flex-wrap gap-4 items-center text-sm print:hidden">
         <label className="flex items-center gap-2 font-semibold"><input type="checkbox" className="w-5 h-5 accent-brand" checked={withNew} onChange={(e) => setWithNew(e.target.checked)} /> Kotha (confirm cheyyani) orders kuda chupinchu</label>
         <label className="flex items-center gap-2 font-semibold" htmlFor="dp-r">Area size
           <select id="dp-r" className="input h-9 w-auto" value={radius} onChange={(e) => setRadius(Number(e.target.value))}>
@@ -184,15 +203,16 @@ export default function DeliveryPlan() {
             {plan.areas.map((a, ai) => {
               const link = mapsRoute(plan.shop, a.route);
               return (
-                <section key={ai} className="card p-4 flex flex-col gap-3 border-l-8" style={{ borderLeftColor: COLORS[ai % COLORS.length] }}>
+                <section key={ai} className="card p-4 flex flex-col gap-3 border-l-8 break-inside-avoid" style={{ borderLeftColor: COLORS[ai % COLORS.length] }}>
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
                       <h2 className="font-extrabold text-lg">Area {ai + 1}{a.name ? ` · ${a.name}` : ''}</h2>
                       <p className="text-sm text-muted">{a.route.length} orders{plan.shop ? ` · shop nunchi ${fmtKm(a.dist)}` : ''} · route ~{fmtKm(a.routeKm)}</p>
                     </div>
                     <div className="flex gap-2">
-                      {link && <a href={link} target="_blank" rel="noreferrer" className="btn-primary h-10 px-3 text-sm">🗺️ Route</a>}
-                      <button type="button" className="btn h-10 px-3 text-sm bg-green-600 text-white" onClick={() => shareArea(a, ai)}>Rider ki pampu</button>
+                      {link && <a href={link} target="_blank" rel="noreferrer" className="btn-primary h-10 px-3 text-sm print:hidden">🗺️ Route</a>}
+                      <button type="button" className="btn h-10 px-3 text-sm bg-green-600 text-white print:hidden" onClick={() => shareArea(a, ai)}>Rider ki pampu</button>
+                      <button type="button" className="btn-ghost h-10 px-3 text-sm print:hidden" onClick={() => download(ai)} aria-label={`Download area ${ai + 1}`}>⬇️</button>
                     </div>
                   </div>
                   <ol className="flex flex-col divide-y divide-gray-100">
