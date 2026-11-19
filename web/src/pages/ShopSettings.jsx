@@ -264,8 +264,11 @@ export default function ShopSettings() {
           <div className="flex flex-col gap-3 rounded-2xl border border-line p-4">
             <h3 className="font-bold">🚚 Delivery types & charges</h3>
             <div className="flex flex-col gap-2 rounded-xl bg-gray-50 p-3">
-              <label className="flex items-center gap-3 font-semibold"><input type="checkbox" className="w-5 h-5 accent-brand" checked={f.normalDelivery !== false} onChange={(e) => setF({ ...f, normalDelivery: e.target.checked })} /> 🛵 Normal delivery (same day)</label>
-              <Field label="Delivery charge (₹)" id="sh-fee" className="max-w-[14rem]"><input id="sh-fee" type="number" min="0" step="1" className="input" value={f.deliveryFee} onChange={set('deliveryFee')} /></Field>
+              <label className="flex items-center gap-3 font-semibold"><input type="checkbox" className="w-5 h-5 accent-brand" checked={f.normalDelivery !== false} onChange={(e) => setF({ ...f, normalDelivery: e.target.checked })} /> 🛵 Normal delivery</label>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <Field label="Delivery charge (₹)" id="sh-fee"><input id="sh-fee" type="number" min="0" step="1" className="input" value={f.deliveryFee} onChange={set('deliveryFee')} /></Field>
+                <Field label="Delivery time" id="sh-ne" hint="Customer ki kanipistundi"><input id="sh-ne" className="input" maxLength={40} value={f.normalEta || ''} onChange={(e) => setF({ ...f, normalEta: e.target.value })} placeholder="1 – 2 hr" /></Field>
+              </div>
             </div>
             <div className="flex flex-col gap-2 rounded-xl bg-amber-50 p-3">
               <label className="flex items-center gap-3 font-semibold"><input type="checkbox" className="w-5 h-5 accent-brand" checked={!!f.morningDelivery} onChange={(e) => setF({ ...f, morningDelivery: e.target.checked })} /> 🌅 Morning delivery (raatri order → podduna delivery)</label>

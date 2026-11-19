@@ -52,7 +52,7 @@ function morningDay(b) {
 function deliverySpeeds(b) {
   const out = [];
   const base = num(b.deliveryFee);
-  if (b.normalDelivery !== false || (!b.morningDelivery && !b.fastDelivery)) out.push({ key: 'normal', label: 'Normal delivery', note: 'Same day', fee: base });
+  if (b.normalDelivery !== false || (!b.morningDelivery && !b.fastDelivery)) out.push({ key: 'normal', label: 'Normal delivery', note: b.normalEta || 'Same day', fee: base });
   if (b.morningDelivery) {
     const md = morningDay(b);
     out.push({ key: 'morning', label: 'Morning delivery', note: `${md.label} ${b.morningSlot || ''}`.trim(), fee: num(b.morningFee), cutoff: b.morningCutoff });
