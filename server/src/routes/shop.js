@@ -41,6 +41,8 @@ const publicBusiness = (b) => ({
   upi: Boolean(b.upiId), onlinePay: Boolean(b.allowOnlinePay && shopKeys(b)), cod: b.allowCod !== false || !(b.allowOnlinePay && shopKeys(b)), allowPickup: b.allowPickup, allowDelivery: b.allowDelivery, deliveryFee: num(b.deliveryFee),
   minOrder: num(b.minOrder), allowBooking: b.allowBooking, allowTable: b.allowTable, otp: otpEnabled(),
   lat: b.shopLat, lng: b.shopLng, mapUrl: b.shopMapUrl,
+  gallery: b.shopGallery || [], instagram: b.shopInstagram, facebook: b.shopFacebook, youtube: b.shopYoutube,
+  ownDomain: b.customDomainStatus === 'live' ? b.customDomain : null,
 });
 
 router.get('/:slug', h(async (req, res) => {

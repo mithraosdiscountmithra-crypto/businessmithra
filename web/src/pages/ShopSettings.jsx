@@ -195,6 +195,12 @@ export default function ShopSettings() {
         <div className="grid sm:grid-cols-2 gap-4">
           <ImageUpload label="Logo" images={f.shopLogo ? [f.shopLogo] : []} max={1} onChange={(a) => setF({ ...f, shopLogo: a[0] || '' })} />
           <ImageUpload label="Cover photo (shop front / banner)" images={f.shopCover ? [f.shopCover] : []} max={1} onChange={(a) => setF({ ...f, shopCover: a[0] || '' })} />
+          <ImageUpload label="Gallery photos (shop, food, products – website lo chupistam)" images={f.shopGallery || []} max={8} onChange={(a) => setF({ ...f, shopGallery: a })} />
+          <div className="grid sm:grid-cols-3 gap-3">
+            <Field label="Instagram link" id="sh-ig"><input id="sh-ig" className="input" value={f.shopInstagram || ''} onChange={(e) => setF({ ...f, shopInstagram: e.target.value })} placeholder="https://instagram.com/…" /></Field>
+            <Field label="Facebook page link" id="sh-fb"><input id="sh-fb" className="input" value={f.shopFacebook || ''} onChange={(e) => setF({ ...f, shopFacebook: e.target.value })} placeholder="https://facebook.com/…" /></Field>
+            <Field label="YouTube link" id="sh-yt"><input id="sh-yt" className="input" value={f.shopYoutube || ''} onChange={(e) => setF({ ...f, shopYoutube: e.target.value })} placeholder="https://youtube.com/…" /></Field>
+          </div>
           <Field label="Tagline" id="sh-tag" className="sm:col-span-2"><input id="sh-tag" className="input" maxLength={120} value={f.shopTagline} onChange={set('shopTagline')} placeholder="e.g. Pure silk & cotton sarees since 1995" /></Field>
           <Field label="About the shop" id="sh-about" className="sm:col-span-2"><textarea id="sh-about" rows={3} className="input h-auto py-2.5" value={f.shopAbout} onChange={set('shopAbout')} /></Field>
           <Field label="Timings" id="sh-time"><input id="sh-time" className="input" value={f.shopTimings} onChange={set('shopTimings')} placeholder="Mon–Sat 10 AM – 9 PM" /></Field>

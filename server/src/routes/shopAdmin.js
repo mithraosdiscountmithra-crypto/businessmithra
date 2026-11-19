@@ -31,6 +31,7 @@ const shopFields = (b) => ({
   shopCover: b.shopCover || '', shopColor: b.shopColor, shopTimings: b.shopTimings || '', upiId: b.upiId || '', orderAlertPhone: b.orderAlertPhone || '',
   allowPickup: b.allowPickup, allowDelivery: b.allowDelivery, deliveryFee: num(b.deliveryFee), minOrder: num(b.minOrder), allowBooking: b.allowBooking,
   allowTable: b.allowTable, shopLat: b.shopLat, shopLng: b.shopLng, shopMapUrl: b.shopMapUrl || '',
+  shopGallery: b.shopGallery || [], shopInstagram: b.shopInstagram || '', shopFacebook: b.shopFacebook || '', shopYoutube: b.shopYoutube || '',
   customDomain: b.customDomain || '', customDomainStatus: b.customDomainStatus || null,
   allowOnlinePay: b.allowOnlinePay, allowCod: b.allowCod, rzpKeyId: b.rzpKeyId || '', rzpSecretSaved: Boolean(b.rzpKeySecret),
   onlineReady: Boolean(shopKeys(b)), platformTest: isTestKey(platformKeys()),
@@ -58,6 +59,10 @@ const settingsSchema = z.object({
   allowTable: z.boolean().default(false),
   shopLat: z.preprocess((v) => (v === null || v === '' || v === undefined ? null : Number(v)), z.number().min(-90).max(90).nullable()),
   shopLng: z.preprocess((v) => (v === null || v === '' || v === undefined ? null : Number(v)), z.number().min(-180).max(180).nullable()),
+  shopGallery: z.array(z.string().trim().max(500).regex(/^https:\/\//)).max(8).optional(),
+  shopInstagram: z.string().trim().max(200).refine((v) => v === '' || /^https:\/\/(www\.)?instagram\.com\//.test(v), 'Paste your Instagram link (https://instagram.com/…)').transform((v) => v || null).optional(),
+  shopFacebook: z.string().trim().max(200).refine((v) => v === '' || /^https:\/\/(www\.|m\.)?(facebook|fb)\.com\//.test(v), 'Paste your Facebook page link (https://facebook.com/…)').transform((v) => v || null).optional(),
+  shopYoutube: z.string().trim().max(200).refine((v) => v === '' || /^https:\/\/(www\.)?(youtube\.com|youtu\.be)\//.test(v), 'Paste your YouTube link').transform((v) => v || null).optional(),
   shopMapUrl: z.string().trim().max(500).refine((v) => v === '' || /^https:\/\/(maps\.app\.goo\.gl|goo\.gl\/maps|(www\.)?google\.[a-z.]+\/maps|maps\.google\.[a-z.]+)/.test(v), 'Paste a Google Maps link (https://maps.app.goo.gl/…)').transform((v) => v || null).optional(),
 });
 

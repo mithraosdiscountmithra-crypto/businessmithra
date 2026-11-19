@@ -447,6 +447,10 @@ export default function Storefront() {
     </>
   );
 
+  const foodish = /restaurant|food|cafe|hotel|bakery|sweet|tiffin|mess|juice|cloud/i.test(shop.type || '');
+  const menuLabel = shop.allowBooking && !shop.allowPickup && !shop.allowDelivery ? 'Our Services' : foodish ? 'Our Menu' : 'Our Products';
+  const dirUrl = shop.lat ? `https://www.google.com/maps/dir/?api=1&destination=${shop.lat},${shop.lng}` : shop.mapUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([shop.name, shop.address, shop.city].filter(Boolean).join(', '))}`;
+
   const contactFields = (
     <>
       <div><label className="label" htmlFor="s-name">Mee peru</label><input id="s-name" required className="input" value={form.name} onChange={setF('name')} autoComplete="name" /></div>
@@ -455,71 +459,107 @@ export default function Storefront() {
   );
 
   return (
-    <div className="min-h-screen bg-[#F6F6F8] pb-28">
-      <header className="relative">
-        <div className="h-40 sm:h-56 w-full bg-gray-200" style={shop.cover ? { backgroundImage: `url(${shop.cover})`, backgroundSize: 'cover', backgroundPosition: 'center' } : { background: `linear-gradient(135deg, ${color}, #111827)` }} />
-        <div className="max-w-5xl mx-auto px-4 -mt-12 relative flex items-end gap-4">
-          <div className="w-24 h-24 rounded-2xl border-4 border-white bg-white shadow-md overflow-hidden flex items-center justify-center shrink-0">
-            {shop.logo ? <img src={shop.logo} alt={`${shop.name} logo`} className="w-full h-full object-cover" /> : <span className="text-3xl font-extrabold" style={{ color }}>{shop.name.slice(0, 1)}</span>}
+    <div className="min-h-screen bg-[#F6F6F8] pb-24">
+      {/* ── Top bar ── */}
+      <nav className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-gray-200" aria-label="Shop">
+        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center gap-3">
+          <a href="#top" className="flex items-center gap-2.5 min-w-0">
+            <span className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center shrink-0 text-white font-extrabold" style={{ background: color }}>
+              {shop.logo ? <img src={shop.logo} alt="" className="w-full h-full object-cover" /> : shop.name.slice(0, 1)}
+            </span>
+            <span className="font-extrabold text-lg truncate">{shop.name}</span>
+          </a>
+          <div className="hidden md:flex items-center gap-6 ml-auto text-sm font-semibold text-gray-700">
+            <a href="#menu" className="hover:text-black">{menuLabel}</a>
+            {data.offers?.length > 0 && <a href="#offers" className="hover:text-black">Offers</a>}
+            {(shop.about || shop.gallery?.length > 0) && <a href="#about" className="hover:text-black">About</a>}
+            <a href="#contact" className="hover:text-black">Contact</a>
           </div>
-          <div className="pb-1 min-w-0">
-            <h1 className="text-xl sm:text-2xl font-extrabold truncate">{shop.name}</h1>
-            {shop.tagline && <p className="text-sm text-gray-600 truncate">{shop.tagline}</p>}
+          <div className="flex items-center gap-2 ml-auto md:ml-4">
+            {(me || getOrderTokens(slug).length > 0) && <button type="button" onClick={openMyOrders} className="hidden sm:flex h-10 px-3 rounded-xl border border-gray-300 font-bold text-sm items-center">My Orders</button>}
+            {shop.phone && <a href={`tel:${shop.phone}`} aria-label="Call" className="h-10 px-4 rounded-xl text-white font-bold text-sm flex items-center" style={{ background: color }}>📞 Call</a>}
           </div>
         </div>
-        <div className="max-w-5xl mx-auto px-4 pt-3 flex flex-wrap gap-2 text-sm">
-          {shop.phone && <a href={`https://wa.me/91${shop.phone}`} target="_blank" rel="noreferrer" className="h-10 px-4 rounded-xl bg-green-600 text-white font-bold flex items-center">WhatsApp</a>}
-          {shop.phone && <a href={`tel:${shop.phone}`} className="h-10 px-4 rounded-xl bg-white border border-gray-300 font-bold flex items-center">Call</a>}
-          {(shop.lat || shop.mapUrl || shop.address || shop.city) && (
-            <a
-              href={shop.lat ? `https://www.google.com/maps/dir/?api=1&destination=${shop.lat},${shop.lng}` : shop.mapUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([shop.name, shop.address, shop.city].filter(Boolean).join(', '))}`}
-              target="_blank" rel="noreferrer" className="h-10 px-4 rounded-xl bg-white border border-gray-300 font-bold flex items-center"
-            >📍 Directions</a>
-          )}
+      </nav>
+
+      {/* ── Hero ── */}
+      <header id="top" className="relative overflow-hidden">
+        <div className="absolute inset-0" style={shop.cover ? { backgroundImage: `url(${shop.cover})`, backgroundSize: 'cover', backgroundPosition: 'center' } : { background: `linear-gradient(135deg, ${color}, #111827)` }} aria-hidden="true" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/45 to-black/25" aria-hidden="true" />
+        <div className="relative max-w-6xl mx-auto px-4 py-16 sm:py-24 text-white flex flex-col gap-4">
+          {shop.logo && <img src={shop.logo} alt={`${shop.name} logo`} className="w-20 h-20 rounded-2xl object-cover border-4 border-white/90 shadow-lg" />}
+          <h1 className="text-4xl sm:text-5xl font-extrabold leading-tight max-w-2xl">{shop.name}</h1>
+          {shop.tagline && <p className="text-lg sm:text-xl text-white/90 max-w-2xl">{shop.tagline}</p>}
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-white/90">
+            {shop.timings && <span>🕒 {shop.timings}</span>}
+            {shop.city && <span>📍 {[shop.address, shop.city].filter(Boolean).join(', ')}</span>}
+          </div>
+          <div className="flex flex-wrap gap-3 pt-2">
+            {(shop.allowPickup || shop.allowDelivery) && <a href="#menu" className="h-12 px-6 rounded-xl font-bold flex items-center bg-white text-gray-900 shadow">🛒 Order online</a>}
+            {shop.allowTable && <button type="button" onClick={() => { setFormErr(''); setSheet('table'); }} className="h-12 px-6 rounded-xl font-bold text-white shadow" style={{ background: color }}>🍽️ Book a table</button>}
+            {shop.phone && <a href={`https://wa.me/91${shop.phone}`} target="_blank" rel="noreferrer" className="h-12 px-6 rounded-xl font-bold flex items-center bg-green-600 text-white shadow">WhatsApp</a>}
+            {(shop.lat || shop.mapUrl || shop.address || shop.city) && (
+              <a href={dirUrl} target="_blank" rel="noreferrer" className="h-12 px-6 rounded-xl font-bold flex items-center bg-white/15 border border-white/40 text-white backdrop-blur">📍 Directions</a>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* ── What we offer ── */}
+      <div className="bg-white border-b border-gray-200">
+        <div className="max-w-6xl mx-auto px-4 py-4 grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+          {[
+            shop.allowPickup && ['🥡', 'Takeaway', 'Order & pick up'],
+            shop.allowDelivery && ['🚚', 'Home delivery', shop.deliveryFee ? `₹${shop.deliveryFee} delivery` : 'Free delivery'],
+            shop.allowTable && ['🍽️', 'Table booking', 'Reserve in advance'],
+            shop.allowBooking && ['📅', 'Appointments', 'Book a slot'],
+            shop.onlinePay && ['💳', 'Pay online', 'UPI · Cards'],
+            shop.minOrder > 0 && ['🧾', 'Min. order', inr(shop.minOrder)],
+          ].filter(Boolean).slice(0, 4).map(([i, t, sub]) => (
+            <div key={t} className="flex items-center gap-3 rounded-xl bg-gray-50 p-3">
+              <span className="text-2xl" aria-hidden="true">{i}</span>
+              <span><b className="block">{t}</b><span className="text-xs text-gray-600">{sub}</span></span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="max-w-6xl mx-auto px-4 pt-4 flex flex-wrap gap-2 text-sm">
           {data.memberPlans?.length > 0 && (
             <button type="button" onClick={() => { setFormErr(''); setJoinPlan(null); setJoinResult(null); setSheet('member'); }} className="h-10 px-4 rounded-xl font-bold border-2" style={{ borderColor: '#F59E0B', background: benefits ? '#FEF3C7' : '#fff', color: '#92400E' }}>
               {benefits ? `⭐ ${benefits.planName}` : '⭐ Membership'}
             </button>
           )}
-          {shop.allowTable && <button type="button" onClick={() => { setFormErr(''); setSheet('table'); }} className="h-10 px-4 rounded-xl text-white font-bold" style={{ background: color }}>🍽️ Book a table</button>}
           <button type="button" onClick={() => { setSent(false); setSheet({ type: 'ask' }); }} className="h-10 px-4 rounded-xl bg-white border border-gray-300 font-bold">Ask a question</button>
           <InstallButton className="h-10 px-4 rounded-xl bg-white border border-gray-300 font-bold" label="📲 Add to home screen" />
           {(me || getOrderTokens(slug).length > 0) && <button type="button" onClick={openMyOrders} className="h-10 px-4 rounded-xl bg-white border border-gray-300 font-bold">My Orders</button>}
-        </div>
+      </div>
         {data.offers?.length > 0 && (
-          <div className="max-w-5xl mx-auto px-4 pt-3 flex gap-2 overflow-x-auto">
+          <section id="offers" className="max-w-6xl mx-auto px-4 pt-4 flex gap-2 overflow-x-auto scroll-mt-20">
             {data.offers.map((o) => (
               <button key={o.code} type="button" onClick={() => { setCouponIn(o.code); setCoupon(null); setCouponErr(''); }} className="shrink-0 text-left rounded-xl border-2 border-dashed px-3 py-2 bg-white" style={{ borderColor: color }}>
                 <span className="block text-sm font-extrabold" style={{ color }}>🏷️ {o.label}</span>
                 <span className="block text-xs text-gray-600">Code <b>{o.code}</b>{o.minOrder ? ` · min ${inr(o.minOrder)}` : ''}{o.description ? ` · ${o.description}` : ''}</span>
               </button>
             ))}
-          </div>
+          </section>
         )}
         {me && (
-          <p className="max-w-5xl mx-auto px-4 pt-2 text-xs text-gray-600">
+          <p className="max-w-6xl mx-auto px-4 pt-2 text-xs text-gray-600">
             Namaste <strong>{me.name}</strong> ({me.phone}) ·{' '}
             <button type="button" className="underline font-semibold" onClick={() => { clearMe(); setShopToken(null); api('/shop/me/forget', { method: 'POST' }).catch(() => {}); setMeState(null); setOtpStep(false); setForm((f) => ({ ...f, name: '', phone: '' })); }}>Not you?</button>
           </p>
         )}
         {benefits && (
-          <p className="max-w-5xl mx-auto px-4 pt-2 text-sm font-semibold text-amber-900">
+          <p className="max-w-6xl mx-auto px-4 pt-2 text-sm font-semibold text-amber-900">
             ⭐ Meeru {benefits.planName} member · {[benefits.discountPct ? `${benefits.discountPct}% off` : null, benefits.freeDelivery ? 'free delivery' : null].filter(Boolean).join(' + ')} · {fmtDate(benefits.endsAt)} varaku
           </p>
         )}
-        <div className="max-w-5xl mx-auto px-4 pt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
-          {shop.timings && <span>🕒 {shop.timings}</span>}
-          {shop.city && <span>📍 {[shop.address, shop.city].filter(Boolean).join(', ')}</span>}
-          {shop.allowPickup && <span>🥡 Takeaway</span>}
-          {shop.allowDelivery && <span>🚚 Home delivery{shop.deliveryFee ? ` ₹${shop.deliveryFee}` : ' free'}</span>}
-          {shop.allowTable && <span>🍽️ Table booking</span>}
-          {shop.minOrder > 0 && <span>Min. order {inr(shop.minOrder)}</span>}
-        </div>
-      </header>
 
-      <main className="max-w-5xl mx-auto px-4 pt-5 flex flex-col gap-4">
-        {shop.about && <p className="text-sm text-gray-700 bg-white rounded-2xl border border-gray-200 p-4 whitespace-pre-line">{shop.about}</p>}
-        <div className="flex flex-col gap-3 sticky top-0 z-20 bg-[#F6F6F8] py-2">
+
+      <main id="menu" className="max-w-6xl mx-auto px-4 pt-8 flex flex-col gap-4 scroll-mt-16">
+        <h2 className="text-2xl sm:text-3xl font-extrabold">{menuLabel}</h2>
+        <div className="flex flex-col gap-3 sticky top-16 z-20 bg-[#F6F6F8] py-2">
           <label className="sr-only" htmlFor="shop-q">Search</label>
           <input id="shop-q" type="search" className="input bg-white" placeholder={`Search in ${shop.name}`} value={q} onChange={(e) => setQ(e.target.value)} />
           {categories.length > 0 && (
@@ -545,8 +585,80 @@ export default function Storefront() {
             ))}
           </div>
         )}
-        <p className="text-center text-xs text-gray-500 pt-6">Prices include GST · Powered by BusinessMithra</p>
+        <p className="text-center text-xs text-gray-500 pt-2">Prices include GST</p>
       </main>
+
+      {/* ── About + gallery ── */}
+      {(shop.about || shop.gallery?.length > 0) && (
+        <section id="about" className="max-w-6xl mx-auto px-4 pt-14 scroll-mt-16">
+          <h2 className="text-2xl sm:text-3xl font-extrabold mb-4">About {shop.name}</h2>
+          {shop.about && <p className="text-base text-gray-700 leading-relaxed whitespace-pre-line max-w-3xl">{shop.about}</p>}
+          {shop.gallery?.length > 0 && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
+              {shop.gallery.map((src, i) => (
+                <img key={src} src={src} alt={`${shop.name} photo ${i + 1}`} loading="lazy" className={`w-full object-cover rounded-2xl ${i === 0 ? 'col-span-2 row-span-2 aspect-square' : 'aspect-square'}`} />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* ── Contact ── */}
+      <section id="contact" className="max-w-6xl mx-auto px-4 pt-14 scroll-mt-16">
+        <h2 className="text-2xl sm:text-3xl font-extrabold mb-4">Visit us</h2>
+        <div className="grid md:grid-cols-2 gap-4">
+          <div className="bg-white rounded-2xl border border-gray-200 p-5 flex flex-col gap-3">
+            {(shop.address || shop.city) && <p className="flex gap-3"><span aria-hidden="true">📍</span><span>{[shop.address, shop.city, shop.state].filter(Boolean).join(', ')}</span></p>}
+            {shop.timings && <p className="flex gap-3"><span aria-hidden="true">🕒</span><span>{shop.timings}</span></p>}
+            {shop.phone && <p className="flex gap-3"><span aria-hidden="true">📞</span><a className="font-semibold" href={`tel:${shop.phone}`}>+91 {shop.phone}</a></p>}
+            <div className="flex flex-wrap gap-2 pt-1">
+              {shop.phone && <a href={`https://wa.me/91${shop.phone}`} target="_blank" rel="noreferrer" className="h-11 px-4 rounded-xl bg-green-600 text-white font-bold flex items-center">WhatsApp</a>}
+              {(shop.lat || shop.mapUrl || shop.address || shop.city) && <a href={dirUrl} target="_blank" rel="noreferrer" className="h-11 px-4 rounded-xl border border-gray-300 font-bold flex items-center">Get directions</a>}
+              <button type="button" onClick={() => { setSent(false); setSheet({ type: 'ask' }); }} className="h-11 px-4 rounded-xl border border-gray-300 font-bold">Send a message</button>
+            </div>
+          </div>
+          {shop.lat ? (
+            <iframe title={`${shop.name} on map`} className="w-full h-64 md:h-full min-h-[16rem] rounded-2xl border border-gray-200" loading="lazy" referrerPolicy="no-referrer-when-downgrade"
+              src={`https://maps.google.com/maps?q=${shop.lat},${shop.lng}&z=16&output=embed`} />
+          ) : (
+            <div className="rounded-2xl min-h-[12rem] flex items-center justify-center text-center p-6 text-white" style={{ background: `linear-gradient(135deg, ${color}, #111827)` }}>
+              <p className="text-lg font-bold">{shop.tagline || `Welcome to ${shop.name}`}</p>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* ── Footer ── */}
+      <footer className="mt-14 bg-gray-900 text-gray-300">
+        <div className="max-w-6xl mx-auto px-4 py-10 grid sm:grid-cols-3 gap-6 text-sm">
+          <div>
+            <p className="text-white text-lg font-extrabold">{shop.name}</p>
+            {shop.tagline && <p className="mt-1">{shop.tagline}</p>}
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <a href="#menu" className="hover:text-white">{menuLabel}</a>
+            {(shop.about || shop.gallery?.length > 0) && <a href="#about" className="hover:text-white">About</a>}
+            <a href="#contact" className="hover:text-white">Contact</a>
+            {(me || getOrderTokens(slug).length > 0) && <button type="button" onClick={openMyOrders} className="text-left hover:text-white">My Orders</button>}
+          </div>
+          <div className="flex flex-col gap-3">
+            {(shop.instagram || shop.facebook || shop.youtube) && (
+              <div className="flex gap-2">
+                {[['Instagram', shop.instagram, '📸'], ['Facebook', shop.facebook, '👍'], ['YouTube', shop.youtube, '▶️']].filter((x) => x[1]).map(([n, href, i]) => (
+                  <a key={n} href={href} target="_blank" rel="noreferrer" className="h-10 px-3 rounded-xl bg-white/10 hover:bg-white/20 flex items-center gap-1.5 font-semibold text-white">{i} {n}</a>
+                ))}
+              </div>
+            )}
+            {shop.phone && <a href={`tel:${shop.phone}`} className="text-white font-semibold">📞 +91 {shop.phone}</a>}
+          </div>
+        </div>
+        <p className="border-t border-white/10 text-center text-xs py-4">© {new Date().getFullYear()} {shop.name} · Powered by BusinessMithra</p>
+      </footer>
+
+      {/* Floating WhatsApp */}
+      {shop.phone && !(cartCount > 0 && (shop.allowPickup || shop.allowDelivery)) && (
+        <a href={`https://wa.me/91${shop.phone}`} target="_blank" rel="noreferrer" aria-label="Chat on WhatsApp" className="fixed bottom-5 right-5 z-30 w-14 h-14 rounded-full bg-green-600 text-white text-2xl flex items-center justify-center shadow-xl">💬</a>
+      )}
 
       {cartCount > 0 && (shop.allowPickup || shop.allowDelivery) && (
         <div className="fixed bottom-0 inset-x-0 p-3 z-30">

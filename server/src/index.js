@@ -58,7 +58,7 @@ app.use(
         imgSrc: ["'self'", 'data:', 'https:'],
         scriptSrc: ["'self'", 'https://checkout.razorpay.com'],
         connectSrc: ["'self'", 'https://api.cloudinary.com', 'https://api.razorpay.com', 'https://lumberjack.razorpay.com'],
-        frameSrc: ["'self'", 'https://api.razorpay.com', 'https://checkout.razorpay.com'],
+        frameSrc: ["'self'", 'https://api.razorpay.com', 'https://checkout.razorpay.com', 'https://www.google.com', 'https://maps.google.com'],
       },
     },
   })

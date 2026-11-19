@@ -53,6 +53,10 @@ model Business {
   shopMapUrl    String?
   nextOrderNo   Int            @default(1)
   nextCreditNo  Int            @default(1)
+  shopGallery   String[]       @default([]) // photos for the shop website
+  shopInstagram String?
+  shopFacebook  String?
+  shopYoutube   String?
   allowOnlinePay Boolean       @default(false) // Razorpay in the online shop
   allowCod      Boolean        @default(true)  // cash on delivery / pay at shop
   rzpKeyId      String?
