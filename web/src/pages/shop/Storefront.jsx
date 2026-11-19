@@ -212,6 +212,12 @@ export default function Storefront() {
   const fee = form.fulfilment === 'delivery' && !(memberOk && benefits.freeDelivery) ? shop?.deliveryFee || 0 : 0;
   const memberDisc = memberOk && benefits.discountPct ? Math.round(itemsTotal * benefits.discountPct) / 100 : 0;
   const [payChoice, setPayChoice] = useState('');
+  const payOpts = !shop ? [] : [
+    shop.onlinePay && ['online', '💳 Pay online now', 'UPI apps · Card · Netbanking (secure)'],
+    shop.upi && ['upi', '📱 Pay by UPI to shop', 'GPay / PhonePe / Paytm – next page lo pay cheyyandi'],
+    shop.cod && ['cod', form.fulfilment === 'delivery' ? '💵 Cash on delivery' : '💵 Cash / pay at shop', 'Order teesukune appudu pay cheyyandi'],
+  ].filter(Boolean);
+  const payNow = payOpts.some((o) => o[0] === payChoice) ? payChoice : payOpts[0]?.[0] || 'cod';
   const [couponIn, setCouponIn] = useState('');
   const [coupon, setCoupon] = useState(null);
   const [couponErr, setCouponErr] = useState('');
@@ -359,7 +365,7 @@ export default function Storefront() {
         name: form.name, phone: form.phone, address: form.address, note: form.note,
         fulfilment: kind === 'order' ? form.fulfilment : 'pickup',
         couponCode: kind === 'order' && coupon ? coupon.code : null,
-        payChoice: kind === 'order' ? (payChoice || (shop.cod ? 'cod' : 'online')) : 'cod',
+        payChoice: kind === 'order' ? payNow : 'cod',
         guests: kind === 'table' ? Number(form.guests) : null,
         ...(kind === 'order' && form.fulfilment === 'delivery' ? { lat: loc?.lat ?? null, lng: loc?.lng ?? null, landmark, saveAddress: saveAddr, addressLabel: addrLabel } : {}),
         preferredAt: form.preferredAt ? new Date(form.preferredAt).toISOString() : '',
@@ -795,11 +801,11 @@ export default function Storefront() {
               </fieldset>
             )}
             <div><label className="label" htmlFor="s-note">Note (optional)</label><input id="s-note" className="input" value={form.note} onChange={setF('note')} placeholder="Size, colour, timing…" /></div>
-            {shop.onlinePay && (
+            {payOpts.length > 1 ? (
               <fieldset className="flex flex-col gap-2">
                 <legend className="label">Payment</legend>
-                {[['online', '💳 Pay online now', 'UPI · Card · Netbanking'], ...(shop.cod ? [['cod', form.fulfilment === 'delivery' ? '💵 Cash on delivery' : '💵 Pay at shop', 'Order teesukune appudu pay cheyyandi']] : [])].map(([k, l, sub]) => {
-                  const on = (payChoice || (shop.cod ? 'cod' : 'online')) === k;
+                {payOpts.map(([k, l, sub]) => {
+                  const on = payNow === k;
                   return (
                     <label key={k} className="flex items-center gap-3 rounded-xl border-2 p-3 cursor-pointer" style={{ borderColor: on ? color : '#E5E7EB' }}>
                       <input type="radio" name="paychoice" className="w-5 h-5" checked={on} onChange={() => setPayChoice(k)} style={{ accentColor: color }} />
@@ -808,7 +814,7 @@ export default function Storefront() {
                   );
                 })}
               </fieldset>
-            )}
+            ) : payOpts.length === 1 && <p className="text-sm text-gray-700">Payment: <b>{payOpts[0][1]}</b></p>}
             <div className="flex flex-col gap-1">
               <label className="label" htmlFor="s-cpn">Coupon code</label>
               <div className="flex gap-2">
@@ -829,7 +835,7 @@ export default function Storefront() {
             {shop.minOrder > 0 && itemsTotal < shop.minOrder && <p className="text-sm font-semibold text-orange-800">Minimum order {inr(shop.minOrder)}. Inka {inr(shop.minOrder - itemsTotal)} add cheyyandi.</p>}
             {formErr && <p className="error-box" role="alert">{formErr}</p>}
             <button type="submit" disabled={busy || (shop.minOrder > 0 && itemsTotal < shop.minOrder)} className="h-14 rounded-2xl text-white font-bold text-base disabled:opacity-60" style={{ background: color }}>
-              {busy ? 'Please wait…' : (payChoice || (shop.cod ? 'cod' : 'online')) === 'online' && shop.onlinePay ? `Pay ${inr(Math.round(itemsTotal - memberDisc - couponOff + fee))} & place order` : cta('Place order')}
+              {busy ? 'Please wait…' : payNow === 'online' ? `Pay ${inr(Math.round(itemsTotal - memberDisc - couponOff + fee))} & place order` : cta('Place order')}
             </button>
             <p className="text-xs text-center text-muted">Order ayyaka shop vaallu confirm chestaru.{shop.upi ? ' UPI tho ventane pay cheyyochu.' : ''}</p>
           </form>

@@ -10,7 +10,7 @@ const COLORS = ['#3730A3', '#C2410C', '#0F766E', '#BE185D', '#1D4ED8', '#7C2D12'
 
 // Online payment (Razorpay) + cash on delivery.
 function PaymentsCard({ initial }) {
-  const [p, setP] = useState({ allowOnlinePay: initial.allowOnlinePay, allowCod: initial.allowCod, rzpKeyId: initial.rzpKeyId, rzpKeySecret: '' });
+  const [p, setP] = useState({ allowOnlinePay: initial.allowOnlinePay, allowCod: initial.allowCod, allowUpiPay: initial.allowUpiPay ?? true, rzpKeyId: initial.rzpKeyId, rzpKeySecret: '' });
   const [info, setInfo] = useState(initial);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
@@ -22,7 +22,7 @@ function PaymentsCard({ initial }) {
     try {
       const r = await api('/shop-admin/payments', { method: 'PUT', body: { ...p, ...extra } });
       setInfo(r.settings);
-      setP({ allowOnlinePay: r.settings.allowOnlinePay, allowCod: r.settings.allowCod, rzpKeyId: r.settings.rzpKeyId, rzpKeySecret: '' });
+      setP({ allowOnlinePay: r.settings.allowOnlinePay, allowCod: r.settings.allowCod, allowUpiPay: r.settings.allowUpiPay, rzpKeyId: r.settings.rzpKeyId, rzpKeySecret: '' });
       setMsg('Saved ✓');
     } catch (x) {
       setErr(x.message);
@@ -33,11 +33,14 @@ function PaymentsCard({ initial }) {
   return (
     <section className="card p-5 flex flex-col gap-4">
       <h2 className="font-bold text-lg">💳 Payments – online shop</h2>
+      <p className="text-sm text-muted -mt-2">Customer ki e options kanipinchalo on / off cheyyandi. Kanisam okkati on lo undali.</p>
       <ErrorBox>{err}</ErrorBox>
       <label className="flex items-start gap-3"><input type="checkbox" className="w-5 h-5 mt-0.5 accent-brand" checked={p.allowOnlinePay} onChange={(e) => setP({ ...p, allowOnlinePay: e.target.checked })} />
-        <span><b>Online payment (UPI / Card / Netbanking)</b><span className="block text-xs text-muted">Customer order chesetappude Razorpay lo pay chestaru, order automatic ga "Paid" avtundi.</span></span></label>
+        <span><b>💳 Online payment – Razorpay (UPI / Card / Netbanking)</b><span className="block text-xs text-muted">Customer order chesetappude Razorpay lo pay chestaru, order automatic ga "Paid" avtundi.</span></span></label>
       <label className="flex items-start gap-3"><input type="checkbox" className="w-5 h-5 mt-0.5 accent-brand" checked={p.allowCod} onChange={(e) => setP({ ...p, allowCod: e.target.checked })} />
-        <span><b>Cash on delivery / Pay at shop</b><span className="block text-xs text-muted">Order teesukune appudu cash / UPI.</span></span></label>
+        <span><b>💵 Cash (delivery / at shop)</b><span className="block text-xs text-muted">Order teesukune appudu cash.</span></span></label>
+      <label className="flex items-start gap-3"><input type="checkbox" className="w-5 h-5 mt-0.5 accent-brand" checked={p.allowUpiPay} onChange={(e) => setP({ ...p, allowUpiPay: e.target.checked })} />
+        <span><b>📱 UPI to my UPI ID (manual)</b><span className="block text-xs text-muted">Customer GPay / PhonePe tho mee UPI ID ki pay chestaru. Dabbulu vachaka meeru order lo "Paid" mark cheyyali.{!initial.upiId && ' Paina "UPI ID" box lo mee UPI ID pettandi.'}</span></span></label>
       {info.platformTest && !info.rzpSecretSaved && (
         <p className="text-sm bg-amber-50 border border-amber-200 rounded-xl p-3">🧪 <b>Test mode:</b> mee keys lekapoyina BusinessMithra test keys tho online payment try cheyyochu. Test lo real money povu – Razorpay test UPI <code>success@razorpay</code> leda test card vaadandi.</p>
       )}

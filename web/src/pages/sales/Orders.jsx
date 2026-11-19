@@ -108,7 +108,7 @@ export default function Orders() {
                   </div>
                   <div className="flex flex-col items-end gap-1">
                     <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${cls}`}>{label}</span>
-                    <span className={`text-xs font-bold ${Number(o.total) === 0 ? 'hidden' : ''} ${o.paymentStatus === 'paid' ? 'text-green-800' : 'text-orange-800'}`}>{o.paymentStatus === 'paid' ? `Paid${o.paymentMode ? ` · ${MODE_LABEL[o.paymentMode]}` : ''}` : o.payChoice === 'online' ? 'Online pay pending' : o.kind === 'order' ? (o.fulfilment === 'delivery' ? 'COD – not paid' : 'Pay at shop') : 'Not paid'}</span>
+                    <span className={`text-xs font-bold ${Number(o.total) === 0 ? 'hidden' : ''} ${o.paymentStatus === 'paid' ? 'text-green-800' : 'text-orange-800'}`}>{o.paymentStatus === 'paid' ? `Paid${o.paymentMode ? ` · ${MODE_LABEL[o.paymentMode]}` : ''}` : o.payChoice === 'online' ? 'Online pay pending' : o.payChoice === 'upi' ? 'UPI – check & mark paid' : o.kind === 'order' ? (o.fulfilment === 'delivery' ? 'COD – not paid' : 'Pay at shop') : 'Not paid'}</span>
                   </div>
                 </div>
                 {o.items.length > 0 && <ul className="text-sm bg-gray-50 rounded-xl p-3 flex flex-col gap-1">

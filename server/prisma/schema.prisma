@@ -59,6 +59,7 @@ model Business {
   shopYoutube   String?
   allowOnlinePay Boolean       @default(false) // Razorpay in the online shop
   allowCod      Boolean        @default(true)  // cash on delivery / pay at shop
+  allowUpiPay   Boolean        @default(true)  // customer pays to the shop's UPI ID (manual check)
   rzpKeyId      String?
   rzpKeySecret  String?        // encrypted
   autoSendPaidBill Boolean     @default(true) // WhatsApp the PDF automatically once a bill is fully paid

@@ -33,7 +33,7 @@ const shopFields = (b) => ({
   allowTable: b.allowTable, shopLat: b.shopLat, shopLng: b.shopLng, shopMapUrl: b.shopMapUrl || '',
   shopGallery: b.shopGallery || [], shopInstagram: b.shopInstagram || '', shopFacebook: b.shopFacebook || '', shopYoutube: b.shopYoutube || '',
   customDomain: b.customDomain || '', customDomainStatus: b.customDomainStatus || null,
-  allowOnlinePay: b.allowOnlinePay, allowCod: b.allowCod, rzpKeyId: b.rzpKeyId || '', rzpSecretSaved: Boolean(b.rzpKeySecret),
+  allowOnlinePay: b.allowOnlinePay, allowCod: b.allowCod, allowUpiPay: b.allowUpiPay, rzpKeyId: b.rzpKeyId || '', rzpSecretSaved: Boolean(b.rzpKeySecret),
   onlineReady: Boolean(shopKeys(b)), platformTest: isTestKey(platformKeys()),
 });
 
@@ -103,12 +103,15 @@ router.put('/payments', requireOwner, h(async (req, res) => {
   const d = z.object({
     allowOnlinePay: z.boolean(),
     allowCod: z.boolean(),
+    allowUpiPay: z.boolean().default(true),
     rzpKeyId: z.string().trim().max(60).optional().nullable(),
     rzpKeySecret: z.string().trim().max(100).optional().nullable(),
     removeKeys: z.boolean().optional(),
   }).parse(req.body);
-  if (!d.allowOnlinePay && !d.allowCod) throw new HttpError(400, 'Keep at least one: online payment or cash on delivery');
-  const data = { allowOnlinePay: d.allowOnlinePay, allowCod: d.allowCod };
+  if (!d.allowOnlinePay && !d.allowCod && !d.allowUpiPay) throw new HttpError(400, 'Keep at least one payment option on');
+  const cur = await prisma.business.findUnique({ where: { id: req.businessId }, select: { upiId: true } });
+  if (d.allowUpiPay && !d.allowCod && !d.allowOnlinePay && !cur.upiId) throw new HttpError(400, 'Add your UPI ID in shop settings first');
+  const data = { allowOnlinePay: d.allowOnlinePay, allowCod: d.allowCod, allowUpiPay: d.allowUpiPay };
   if (d.removeKeys) Object.assign(data, { rzpKeyId: null, rzpKeySecret: null });
   else if (d.rzpKeyId || d.rzpKeySecret) {
     if (!/^rzp_(test|live)_[A-Za-z0-9]+$/.test(d.rzpKeyId || '')) throw new HttpError(400, 'Key ID should look like rzp_live_xxxxx or rzp_test_xxxxx');
@@ -122,7 +125,7 @@ router.put('/payments', requireOwner, h(async (req, res) => {
   }
   const b = await prisma.business.update({ where: { id: req.businessId }, data });
   if (b.allowOnlinePay && !shopKeys(b)) {
-    await prisma.business.update({ where: { id: b.id }, data: { allowOnlinePay: false, allowCod: true } });
+    await prisma.business.update({ where: { id: b.id }, data: { allowOnlinePay: false, allowCod: b.allowCod || !b.allowUpiPay || !b.upiId } });
     throw new HttpError(400, 'Add your Razorpay keys first to take online payments');
   }
   await logActivity(req.businessId, req.user.id, 'update', 'shop_payments', b.id);

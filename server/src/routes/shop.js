@@ -35,10 +35,18 @@ async function loadShop(slug) {
   return b;
 }
 
+// Which ways a customer can pay at this shop (vendor turns each on/off). Never leaves the shop with none.
+function payOptions(b) {
+  const onlinePay = Boolean(b.allowOnlinePay && shopKeys(b));
+  const upi = Boolean(b.upiId && b.allowUpiPay !== false);
+  const cod = b.allowCod !== false || (!onlinePay && !upi);
+  return { onlinePay, upi, cod };
+}
+
 const publicBusiness = (b) => ({
   name: b.name, slug: b.slug, type: b.type, tagline: b.shopTagline, about: b.shopAbout, logo: b.shopLogo, cover: b.shopCover,
   color: b.shopColor, timings: b.shopTimings, phone: b.phone, address: b.address, city: b.city, state: b.state,
-  upi: Boolean(b.upiId), onlinePay: Boolean(b.allowOnlinePay && shopKeys(b)), cod: b.allowCod !== false || !(b.allowOnlinePay && shopKeys(b)), allowPickup: b.allowPickup, allowDelivery: b.allowDelivery, deliveryFee: num(b.deliveryFee),
+  ...payOptions(b), allowPickup: b.allowPickup, allowDelivery: b.allowDelivery, deliveryFee: num(b.deliveryFee),
   minOrder: num(b.minOrder), allowBooking: b.allowBooking, allowTable: b.allowTable, otp: otpEnabled(),
   lat: b.shopLat, lng: b.shopLng, mapUrl: b.shopMapUrl,
   gallery: b.shopGallery || [], instagram: b.shopInstagram, facebook: b.shopFacebook, youtube: b.shopYoutube,
@@ -78,7 +86,7 @@ const phone = z.string().trim().regex(/^[6-9]\d{9}$/, 'Enter a valid 10-digit mo
 const orderSchema = z.object({
   kind: z.enum(['order', 'booking', 'table']).default('order'),
   couponCode: z.string().trim().max(30).optional().nullable(),
-  payChoice: z.enum(['online', 'cod']).default('cod'),
+  payChoice: z.enum(['online', 'upi', 'cod']).default('cod'),
   guests: z.preprocess((v) => (v === null || v === '' || v === undefined ? null : Number(v)), z.number().int().min(1, 'How many people?').max(100).nullable()),
   name: z.string().trim().min(2, 'Enter your name').max(80),
   phone,
@@ -170,11 +178,12 @@ router.post('/:slug/orders', writeLimiter, h(async (req, res) => {
   const total = Math.round(itemsTotal + deliveryFee);
 
   // Payment choice: online (Razorpay) or cash on delivery / pay at shop.
-  const keys = shopKeys(b);
-  const onlineOk = Boolean(b.allowOnlinePay && keys && d.kind === 'order' && total > 0);
-  const codOk = b.allowCod !== false || !onlineOk;
-  if (d.kind === 'order' && d.payChoice === 'online' && !onlineOk) throw new HttpError(400, 'Online payment is not available at this shop. Choose Cash on delivery.');
-  if (d.kind === 'order' && d.payChoice === 'cod' && !codOk) throw new HttpError(400, 'This shop takes online payment only');
+  const po = payOptions(b);
+  const allowed = { online: po.onlinePay && total > 0, upi: po.upi && total > 0, cod: po.cod || total <= 0 };
+  if (d.kind === 'order' && !allowed[d.payChoice]) {
+    const names = { online: 'Online payment', upi: 'UPI', cod: 'Cash' };
+    throw new HttpError(400, `${names[d.payChoice]} is not available at this shop. Please choose another payment option.`);
+  }
   const payChoice = d.kind === 'order' ? d.payChoice : 'cod';
 
   if (d.address && d.landmark) d.address = `${d.address} (Landmark: ${d.landmark})`;
@@ -331,7 +340,7 @@ router.post('/:slug/membership', writeLimiter, h(async (req, res) => {
   const existing = await prisma.membership.findFirst({ where: { businessId: b.id, phone: p, planId: plan.id, status: 'pending' } });
   const m = existing || await prisma.membership.create({ data: { businessId: b.id, planId: plan.id, customerId: customer.id, phone: p, source: 'shop' } });
   await logActivity(b.id, null, 'membership_request', 'membership', m.id);
-  const upiLink = b.upiId && num(plan.price) > 0
+  const upiLink = b.upiId && b.allowUpiPay !== false && num(plan.price) > 0
     ? `upi://pay?pa=${encodeURIComponent(b.upiId)}&pn=${encodeURIComponent(b.name)}&am=${num(plan.price).toFixed(2)}&cu=INR&tn=${encodeURIComponent(`${plan.name} membership`)}`
     : null;
   res.status(201).json({ ok: true, upiLink, upiId: upiLink ? b.upiId : null, price: num(plan.price) });
@@ -415,7 +424,7 @@ router.get('/order/:token', h(async (req, res) => {
     }
   }
   const b = o.business;
-  const upi = b.upiId && o.paymentStatus !== 'paid' && o.status !== 'cancelled'
+  const upi = b.upiId && b.allowUpiPay !== false && o.paymentStatus !== 'paid' && o.status !== 'cancelled'
     ? `upi://pay?pa=${encodeURIComponent(b.upiId)}&pn=${encodeURIComponent(b.name)}&am=${num(o.total).toFixed(2)}&cu=INR&tn=${encodeURIComponent(o.number)}`
     : null;
   res.json({
