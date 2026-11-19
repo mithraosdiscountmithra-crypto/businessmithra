@@ -49,7 +49,7 @@ const publicBusiness = (b) => ({
   ...payOptions(b), allowPickup: b.allowPickup, allowDelivery: b.allowDelivery, deliveryFee: num(b.deliveryFee),
   minOrder: num(b.minOrder), allowBooking: b.allowBooking, allowTable: b.allowTable, otp: otpEnabled(),
   lat: b.shopLat, lng: b.shopLng, mapUrl: b.shopMapUrl,
-  gallery: b.shopGallery || [], instagram: b.shopInstagram, facebook: b.shopFacebook, youtube: b.shopYoutube,
+  gallery: b.shopGallery || [], template: b.shopTemplate || 'classic', since: b.shopSince || null, instagram: b.shopInstagram, facebook: b.shopFacebook, youtube: b.shopYoutube,
   ownDomain: b.customDomainStatus === 'live' ? b.customDomain : null,
 });
 
