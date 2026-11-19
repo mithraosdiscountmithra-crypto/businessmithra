@@ -134,6 +134,8 @@ export default function Storefront() {
   const [me, setMeState] = useState(saved);
   const [form, setForm] = useState({ name: saved?.name || '', phone: saved?.phone || '', address: saved?.address || '', note: '', fulfilment: 'pickup', preferredAt: '', message: '', guests: 2 });
   const [myOrders, setMyOrders] = useState(null);
+  // "See all my orders": verify the number once in the My Orders sheet.
+  const [mo, setMo] = useState({ phone: '', otp: '', step: false, err: '', busy: false });
   const [otpStep, setOtpStep] = useState(false);
   const [addrs, setAddrs] = useState([]);
   const [addrSel, setAddrSel] = useState('new');
@@ -565,7 +567,7 @@ export default function Storefront() {
             <a href="#contact" className="hover:text-black">Contact</a>
           </div>
           <div className="flex items-center gap-2 ml-auto md:ml-4">
-            {(me || getOrderTokens(slug).length > 0) && <button type="button" onClick={openMyOrders} className="hidden sm:flex h-10 px-3 rounded-xl border border-gray-300 font-bold text-sm items-center">My Orders</button>}
+            {<button type="button" onClick={openMyOrders} className="hidden sm:flex h-10 px-3 rounded-xl border border-gray-300 font-bold text-sm items-center">My Orders</button>}
             {shop.phone && <a href={`tel:${shop.phone}`} aria-label="Call" className="h-10 px-4 rounded-xl text-white font-bold text-sm flex items-center" style={{ background: color }}>📞 Call</a>}
           </div>
         </div>
@@ -620,7 +622,7 @@ export default function Storefront() {
           )}
           <button type="button" onClick={() => { setSent(false); setSheet({ type: 'ask' }); }} className="h-10 px-4 rounded-xl bg-white border border-gray-300 font-bold">Ask a question</button>
           <InstallButton className="h-10 px-4 rounded-xl bg-white border border-gray-300 font-bold" label="📲 Add to home screen" />
-          {(me || getOrderTokens(slug).length > 0) && <button type="button" onClick={openMyOrders} className="h-10 px-4 rounded-xl bg-white border border-gray-300 font-bold">My Orders</button>}
+          {<button type="button" onClick={openMyOrders} className="h-10 px-4 rounded-xl bg-white border border-gray-300 font-bold">My Orders</button>}
       </div>
         {data.offers?.length > 0 && (
           <section id="offers" className="max-w-6xl mx-auto px-4 pt-4 flex gap-2 overflow-x-auto scroll-mt-20">
@@ -764,7 +766,7 @@ export default function Storefront() {
             <a href="#menu" className="hover:text-white">{menuLabel}</a>
             <a href="#about" className="hover:text-white">About</a>
             <a href="#contact" className="hover:text-white">Contact</a>
-            {(me || getOrderTokens(slug).length > 0) && <button type="button" onClick={openMyOrders} className="text-left hover:text-white">My Orders</button>}
+            {<button type="button" onClick={openMyOrders} className="text-left hover:text-white">My Orders</button>}
           </div>
           <div className="flex flex-col gap-3">
             {(shop.instagram || shop.facebook || shop.youtube) && (
@@ -977,7 +979,7 @@ export default function Storefront() {
       {sheet === 'orders' && (
         <Sheet title="My Orders" onClose={() => setSheet(null)}>
           {myOrders === null ? <p className="text-muted">Loading…</p> : myOrders.length === 0 ? (
-            <p className="text-sm text-muted py-6 text-center">Ee phone nunchi inka orders levu.</p>
+            <p className="text-sm text-muted py-4 text-center">Ee phone lo orders dorakaledu.</p>
           ) : (
             <ul className="flex flex-col divide-y divide-gray-100">
               {myOrders.map((o) => (
@@ -992,6 +994,38 @@ export default function Storefront() {
                 </li>
               ))}
             </ul>
+          )}
+          {myOrders !== null && !getShopToken() && (
+            <form className="mt-4 rounded-2xl bg-gray-50 p-4 flex flex-col gap-3" onSubmit={async (e) => {
+              e.preventDefault();
+              setMo((m) => ({ ...m, busy: true, err: '' }));
+              try {
+                if (!mo.step) {
+                  if (!/^[6-9]\d{9}$/.test(mo.phone)) throw new Error('Correct 10-digit mobile number ivvandi');
+                  await api('/shop/otp/send', { method: 'POST', body: { phone: mo.phone, name: me?.name || 'Customer' } });
+                  setMo((m) => ({ ...m, step: true, busy: false }));
+                  return;
+                }
+                const r = await api('/shop/otp/verify', { method: 'POST', body: { phone: mo.phone, code: mo.otp } });
+                setShopToken(r.token);
+                setMo({ phone: '', otp: '', step: false, err: '', busy: false });
+                openMyOrders();
+              } catch (x) {
+                setMo((m) => ({ ...m, busy: false, err: x.message }));
+              }
+            }}>
+              <p className="text-sm font-semibold">📱 Mee anni orders chudali ante mobile number verify cheyyandi</p>
+              {!mo.step ? (
+                <input aria-label="Mobile number" inputMode="numeric" maxLength={10} className="input" placeholder="Mobile number" value={mo.phone} onChange={(e) => setMo({ ...mo, phone: e.target.value.replace(/\D/g, '') })} />
+              ) : (
+                <>
+                  <p className="text-xs text-gray-600">+91 {mo.phone} WhatsApp ki OTP pampamu.</p>
+                  <input aria-label="OTP" inputMode="numeric" autoComplete="one-time-code" maxLength={6} className="input text-center text-2xl tracking-[0.4em] font-bold" value={mo.otp} onChange={(e) => setMo({ ...mo, otp: e.target.value.replace(/\D/g, '') })} autoFocus />
+                </>
+              )}
+              {mo.err && <p className="text-sm font-semibold text-red-700" role="alert">{mo.err}</p>}
+              <button type="submit" disabled={mo.busy} className="h-12 rounded-xl text-white font-bold disabled:opacity-60" style={{ background: color }}>{mo.busy ? 'Please wait…' : mo.step ? '✅ Verify & show orders' : 'Send OTP'}</button>
+            </form>
           )}
         </Sheet>
       )}

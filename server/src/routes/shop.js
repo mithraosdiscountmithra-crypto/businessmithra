@@ -260,6 +260,9 @@ router.post('/:slug/orders', writeLimiter, h(async (req, res) => {
   }
   let pay = null;
   if (payChoice === 'online') pay = await startOnlinePay(b, order).catch((e) => { console.error('rzp order', e.message); return null; });
+  // Remember this order on the phone (cookie) too, for "My Orders" even if the browser loses its storage.
+  const prev = String(req.cookies?.bm_orders || '').split(',').filter((t) => /^[a-f0-9]{32}$/.test(t));
+  rememberDevice(res, 'bm_orders', [order.token, ...prev.filter((t) => t !== order.token)].slice(0, 40).join(','));
   res.status(201).json({ token: order.token, number: order.number, pay });
 }));
 
@@ -324,7 +327,8 @@ router.get('/me/device', h(async (req, res) => {
 
 // "My Orders": with OTP login → every order of that mobile in this shop; otherwise only orders saved on this phone.
 router.post('/my-orders', h(async (req, res) => {
-  const tokens = Array.isArray(req.body?.tokens) ? req.body.tokens.filter((t) => /^[a-f0-9]{32}$/.test(String(t))).slice(0, 50) : [];
+  const fromCookie = String(req.cookies?.bm_orders || '').split(',');
+  const tokens = [...new Set([...(Array.isArray(req.body?.tokens) ? req.body.tokens : []), ...fromCookie])].filter((t) => /^[a-f0-9]{32}$/.test(String(t))).slice(0, 80);
   const verified = shopPhone(req);
   const or = [];
   if (tokens.length) or.push({ token: { in: tokens } });
