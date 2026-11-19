@@ -7,7 +7,6 @@ import { hostShop } from '../../lib/hostShop.js';
 import { InstallButton } from '../../lib/install.jsx';
 import { payWithRazorpay } from '../../lib/razorpay.js';
 import { accent, autoAbout, autoTagline, emojiFor, heroArt, itemArt, tint } from '../../lib/shopTheme.js';
-import { CtaBand, Hero, makeStats, serifStyle, StatsStrip, Steps, tplOf, WhyUs } from './SiteBlocks.jsx';
 import { addOrderToken, clearMe, getMe, getOrderTokens, getShopToken, setMe, setShopToken } from '../../lib/shopDevice.js';
 
 const CART_KEY = (slug) => `bm_cart_${slug}`;
@@ -461,12 +460,6 @@ export default function Storefront() {
   const tagline = shop.tagline || autoTagline(autoInfo);
   const about = shop.about || autoAbout(autoInfo);
   const color2 = accent(color);
-  // Website design template (vendor picks in settings; ?t=modern previews another one).
-  const tKey = (() => { try { return new URLSearchParams(window.location.search).get('t'); } catch { return null; } })() || shop.template || 'classic';
-  const tpl = tplOf(tKey);
-  const stats = makeStats(shop, items, categories);
-  const hs = tpl.serif ? serifStyle : undefined;
-  const dk = tpl.dark;
   const menuLabel = shop.allowBooking && !shop.allowPickup && !shop.allowDelivery ? 'Our Services' : foodish ? 'Our Menu' : 'Our Products';
   const dirUrl = shop.lat ? `https://www.google.com/maps/dir/?api=1&destination=${shop.lat},${shop.lng}` : shop.mapUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([shop.name, shop.address, shop.city].filter(Boolean).join(', '))}`;
 
@@ -478,7 +471,7 @@ export default function Storefront() {
   );
 
   return (
-    <div className="min-h-screen pb-24" style={{ background: tpl.page }}>
+    <div className="min-h-screen bg-[#F6F6F8] pb-24">
       {/* ── Top bar ── */}
       <nav className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-gray-200" aria-label="Shop">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center gap-3">
@@ -502,12 +495,29 @@ export default function Storefront() {
       </nav>
 
       {/* ── Hero ── */}
-      <Hero tpl={tpl} tKey={tKey} shop={shop} tagline={tagline} color={color} cover={shop.cover} stats={stats}
-        dirUrl={(shop.lat || shop.mapUrl || shop.address || shop.city) ? dirUrl : null} onTable={() => { setFormErr(''); setSheet('table'); }} />
-      {tKey !== 'modern' && <StatsStrip stats={stats} color={color} dark={dk} />}
+      <header id="top" className="relative overflow-hidden">
+        <div className="absolute inset-0" style={{ backgroundImage: shop.cover ? `url(${shop.cover})` : heroArt(shop.type, color), backgroundSize: 'cover', backgroundPosition: 'center' }} aria-hidden="true" />
+        <div className={`absolute inset-0 ${shop.cover ? 'bg-gradient-to-t from-black/80 via-black/45 to-black/25' : 'bg-gradient-to-t from-black/45 via-black/10 to-transparent'}`} aria-hidden="true" />
+        <div className="relative max-w-6xl mx-auto px-4 py-16 sm:py-24 text-white flex flex-col gap-4">
+          <h1 className="text-4xl sm:text-6xl font-extrabold leading-tight max-w-3xl drop-shadow-lg">{shop.name}</h1>
+          <p className="text-lg sm:text-xl text-white/95 max-w-2xl drop-shadow">{tagline}</p>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-white/90">
+            {shop.timings && <span>🕒 {shop.timings}</span>}
+            {shop.city && <span>📍 {[shop.address, shop.city].filter(Boolean).join(', ')}</span>}
+          </div>
+          <div className="flex flex-wrap gap-3 pt-2">
+            {(shop.allowPickup || shop.allowDelivery) && <a href="#menu" className="h-12 px-6 rounded-xl font-bold flex items-center bg-white text-gray-900 shadow">🛒 Order online</a>}
+            {shop.allowTable && <button type="button" onClick={() => { setFormErr(''); setSheet('table'); }} className="h-12 px-6 rounded-xl font-bold text-white shadow" style={{ background: color }}>🍽️ Book a table</button>}
+            {shop.phone && <a href={`https://wa.me/91${shop.phone}`} target="_blank" rel="noreferrer" className="h-12 px-6 rounded-xl font-bold flex items-center bg-green-600 text-white shadow">WhatsApp</a>}
+            {(shop.lat || shop.mapUrl || shop.address || shop.city) && (
+              <a href={dirUrl} target="_blank" rel="noreferrer" className="h-12 px-6 rounded-xl font-bold flex items-center bg-white/15 border border-white/40 text-white backdrop-blur">📍 Directions</a>
+            )}
+          </div>
+        </div>
+      </header>
 
       {/* ── What we offer ── */}
-      <div className={dk ? 'bg-[#0B0F19] border-b border-white/10' : 'bg-white border-b border-gray-200'}>
+      <div className="bg-white border-b border-gray-200">
         <div className="max-w-6xl mx-auto px-4 py-5 grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
           {[
             shop.allowPickup && ['🥡', 'Takeaway', 'Order & pick up'],
@@ -560,10 +570,10 @@ export default function Storefront() {
 
       <main id="menu" className="max-w-6xl mx-auto px-4 pt-8 flex flex-col gap-4 scroll-mt-16">
         <div>
-          <h2 className={`text-2xl sm:text-3xl ${tpl.h} ${dk ? 'text-white' : ''}`} style={hs}>{menuLabel}</h2>
+          <h2 className="text-2xl sm:text-3xl font-extrabold">{menuLabel}</h2>
           <span className="block h-1.5 w-20 rounded-full mt-2" style={{ background: `linear-gradient(90deg, ${color}, ${color2})` }} aria-hidden="true" />
         </div>
-        <div className="flex flex-col gap-3 sticky top-16 z-20 py-2" style={{ background: tpl.page }}>
+        <div className="flex flex-col gap-3 sticky top-16 z-20 bg-[#F6F6F8] py-2">
           <label className="sr-only" htmlFor="shop-q">Search</label>
           <input id="shop-q" type="search" className="input bg-white" placeholder={`Search in ${shop.name}`} value={q} onChange={(e) => setQ(e.target.value)} />
           {categories.length > 0 && (
@@ -592,18 +602,15 @@ export default function Storefront() {
         <p className="text-center text-xs text-gray-500 pt-2">Prices include GST</p>
       </main>
 
-      <WhyUs shop={shop} tpl={tpl} color={color} />
-      <Steps shop={shop} tpl={tpl} color={color} />
-
       {/* ── About + gallery ── */}
-      <div className={`mt-14 py-12 ${dk ? 'text-white' : ''}`} style={{ background: dk ? `linear-gradient(135deg, #111827, ${tint(color, 0.35)})` : `linear-gradient(135deg, ${tint(color, 0.1)}, color-mix(in srgb, ${color2} 14%, white))` }}>
+      <div className="mt-14 py-12" style={{ background: `linear-gradient(135deg, ${tint(color, 0.1)}, color-mix(in srgb, ${color2} 14%, white))` }}>
         <section id="about" className="max-w-6xl mx-auto px-4 scroll-mt-20 grid md:grid-cols-2 gap-8 items-center">
           <div>
             <p className="text-sm font-bold uppercase tracking-wider" style={{ color }}>About us</p>
-            <h2 className={`text-2xl sm:text-3xl ${tpl.h} mt-1 mb-4`} style={hs}>Welcome to {shop.name}</h2>
-            <p className={`text-base leading-relaxed whitespace-pre-line ${dk ? 'text-white/80' : 'text-gray-700'}`}>{about}</p>
+            <h2 className="text-2xl sm:text-3xl font-extrabold mt-1 mb-4">Welcome to {shop.name}</h2>
+            <p className="text-base text-gray-700 leading-relaxed whitespace-pre-line">{about}</p>
             <div className="flex flex-wrap gap-2 mt-5">
-              {categories.slice(0, 6).map((c) => <span key={c} className="px-3 py-1.5 rounded-full bg-white text-gray-900 text-sm font-semibold shadow-sm">{emojiFor(c, shop.type)} {c}</span>)}
+              {categories.slice(0, 6).map((c) => <span key={c} className="px-3 py-1.5 rounded-full bg-white text-sm font-semibold shadow-sm">{emojiFor(c, shop.type)} {c}</span>)}
             </div>
           </div>
           {shop.gallery?.length > 0 ? (
@@ -623,12 +630,10 @@ export default function Storefront() {
         </section>
       </div>
 
-      <CtaBand shop={shop} tpl={tpl} color={color} />
-
       {/* ── Contact ── */}
       <section id="contact" className="max-w-6xl mx-auto px-4 pt-14 scroll-mt-16">
         <p className="text-sm font-bold uppercase tracking-wider" style={{ color }}>Contact</p>
-        <h2 className={`text-2xl sm:text-3xl ${tpl.h} mt-1 mb-4 ${dk ? 'text-white' : ''}`} style={hs}>Visit us</h2>
+        <h2 className="text-2xl sm:text-3xl font-extrabold mt-1 mb-4">Visit us</h2>
         <div className="grid md:grid-cols-2 gap-4">
           <div className="bg-white rounded-2xl border border-gray-200 p-5 flex flex-col gap-3">
             {(shop.address || shop.city) && <p className="flex gap-3"><span aria-hidden="true">📍</span><span>{[shop.address, shop.city, shop.state].filter(Boolean).join(', ')}</span></p>}

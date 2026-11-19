@@ -5,7 +5,6 @@ import { ErrorBox, Field, PageHeader } from '../components/ui.jsx';
 import ImageUpload from '../components/ImageUpload.jsx';
 import { useAuth } from '../auth.jsx';
 import { autoAbout, autoTagline } from '../lib/shopTheme.js';
-import { TEMPLATES } from './shop/SiteBlocks.jsx';
 
 const COLORS = ['#3730A3', '#C2410C', '#0F766E', '#BE185D', '#1D4ED8', '#7C2D12', '#111827'];
 
@@ -195,33 +194,6 @@ export default function ShopSettings() {
             )}
           </div>
         )}
-      </section>
-
-      <section className="card p-5 flex flex-col gap-4">
-        <h2 className="text-lg font-bold">🎨 Website design</h2>
-        <p className="text-sm text-muted -mt-2">Mee shop website ki design select chesi kindha <b>Save</b> nokkandi. "👁 Preview" tho save cheyyakunda new tab lo chudochu.</p>
-        <a href={`${window.location.origin}/s/${f.slug}?t=${f.shopTemplate || 'classic'}`} target="_blank" rel="noreferrer" className="btn-primary self-start">👁 Selected design preview chudandi</a>
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-          {[
-              { key: 'classic', thumb: (<div className="h-full flex flex-col"><div className="h-1/2 bg-gradient-to-br from-indigo-500 to-gray-900 p-1.5"><div className="h-1.5 w-10 bg-white rounded" /><div className="h-1 w-14 bg-white/70 rounded mt-1" /></div><div className="flex-1 bg-gray-100 grid grid-cols-3 gap-1 p-1.5">{[0,1,2].map((i) => <div key={i} className="bg-white rounded" />)}</div></div>) },
-              { key: 'modern', thumb: (<div className="h-full grid grid-cols-2 gap-1.5 p-2 bg-gradient-to-br from-indigo-50 to-white"><div className="flex flex-col gap-1 justify-center"><div className="h-2 w-12 bg-gray-900 rounded" /><div className="h-1 w-10 bg-gray-400 rounded" /><div className="h-2 w-8 bg-indigo-600 rounded mt-1" /></div><div className="rounded-lg bg-gradient-to-br from-indigo-400 to-pink-400" /></div>) },
-              { key: 'bold', thumb: (<div className="h-full bg-[#0B0F19] p-2 flex flex-col justify-center gap-1"><div className="h-1 w-6 rounded bg-gradient-to-r from-orange-500 to-pink-500" /><div className="h-2.5 w-16 bg-white rounded-sm" /><div className="h-1 w-12 bg-white/50 rounded" /><div className="h-2 w-8 bg-orange-500 rounded mt-1" /></div>) },
-              { key: 'elegant', thumb: (<div className="h-full bg-[#FBF8F3] flex flex-col"><div className="h-1/2 bg-gradient-to-br from-rose-200 to-amber-100" /><div className="mx-auto -mt-3 bg-white shadow rounded px-3 py-1.5 flex flex-col items-center gap-0.5"><div className="h-1.5 w-12 bg-gray-800 rounded" /><div className="h-px w-6 bg-rose-400" /><div className="h-1 w-10 bg-gray-400 rounded" /></div></div>) },
-              { key: 'fresh', thumb: (<div className="h-full p-2 bg-gradient-to-br from-yellow-100 to-green-100 grid grid-cols-2 gap-1.5"><div className="flex flex-col justify-center gap-1"><div className="h-2 w-12 bg-green-600 rounded" /><div className="h-1 w-10 bg-gray-500 rounded" /></div><div className="grid grid-cols-2 gap-1">{['🥦','🍎','🧺','🍬'].map((e) => <div key={e} className="bg-white rounded-lg text-[10px] flex items-center justify-center">{e}</div>)}</div></div>) },
-          ].map(({ key, thumb }) => {
-            const on = (f.shopTemplate || 'classic') === key;
-            return (
-              <div key={key} className={`rounded-2xl border-2 overflow-hidden flex flex-col ${on ? 'border-brand ring-2 ring-brand/30' : 'border-line'}`}>
-                <button type="button" aria-pressed={on} onClick={() => setF({ ...f, shopTemplate: key })} className="text-left">
-                  <div className="aspect-[4/3]" aria-hidden="true">{thumb}</div>
-                  <div className="p-2.5"><b className="text-sm block">{on ? '✅ ' : ''}{TEMPLATES[key].name}</b><span className="text-xs text-muted">{TEMPLATES[key].desc}</span></div>
-                </button>
-                <a href={`${window.location.origin}/s/${f.slug}?t=${key}`} target="_blank" rel="noreferrer" className="mx-2.5 mb-2.5 mt-auto h-9 rounded-lg border border-line text-sm font-bold flex items-center justify-center gap-1 hover:bg-gray-50">👁 Preview</a>
-              </div>
-            );
-          })}
-        </div>
-        <Field label="Business started in (year, optional)" id="sh-since" hint="Website lo 'Since 2015' laaga trust badge ga vastundi"><input id="sh-since" type="number" min="1900" max="2100" className="input max-w-[12rem]" value={f.shopSince || ''} onChange={(e) => setF({ ...f, shopSince: e.target.value })} /></Field>
       </section>
 
       <section className="card p-5 flex flex-col gap-4">
