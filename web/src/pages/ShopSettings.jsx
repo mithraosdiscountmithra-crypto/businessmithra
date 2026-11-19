@@ -94,7 +94,7 @@ export default function ShopSettings() {
     setOk('');
     setBusy(true);
     try {
-      const r = await api('/shop-admin/settings', { method: 'PUT', body: { ...f, deliveryFee: Number(f.deliveryFee) || 0, minOrder: Number(f.minOrder) || 0, shopMapUrl: f.shopMapUrl || '' } });
+      const r = await api('/shop-admin/settings', { method: 'PUT', body: { ...f, deliveryFee: Number(f.deliveryFee) || 0, morningFee: Number(f.morningFee) || 0, fastFee: Number(f.fastFee) || 0, minOrder: Number(f.minOrder) || 0, shopMapUrl: f.shopMapUrl || '' } });
       setF(r.settings);
       setOk('Saved');
     } catch (x) {
@@ -260,8 +260,35 @@ export default function ShopSettings() {
           <label className="flex items-center gap-3 font-semibold"><input type="checkbox" className="w-5 h-5 accent-brand" checked={f.allowTable} onChange={set('allowTable')} /> 🍽️ Table booking (restaurants, cafés)</label>
           <label className="flex items-center gap-3 font-semibold"><input type="checkbox" className="w-5 h-5 accent-brand" checked={f.allowBooking} onChange={set('allowBooking')} /> 📅 Appointment booking (services – salon, clinic, repair…)</label>
         </div>
+        {f.allowDelivery && (
+          <div className="flex flex-col gap-3 rounded-2xl border border-line p-4">
+            <h3 className="font-bold">🚚 Delivery types & charges</h3>
+            <div className="flex flex-col gap-2 rounded-xl bg-gray-50 p-3">
+              <label className="flex items-center gap-3 font-semibold"><input type="checkbox" className="w-5 h-5 accent-brand" checked={f.normalDelivery !== false} onChange={(e) => setF({ ...f, normalDelivery: e.target.checked })} /> 🛵 Normal delivery (same day)</label>
+              <Field label="Delivery charge (₹)" id="sh-fee" className="max-w-[14rem]"><input id="sh-fee" type="number" min="0" step="1" className="input" value={f.deliveryFee} onChange={set('deliveryFee')} /></Field>
+            </div>
+            <div className="flex flex-col gap-2 rounded-xl bg-amber-50 p-3">
+              <label className="flex items-center gap-3 font-semibold"><input type="checkbox" className="w-5 h-5 accent-brand" checked={!!f.morningDelivery} onChange={(e) => setF({ ...f, morningDelivery: e.target.checked })} /> 🌅 Morning delivery (raatri order → podduna delivery)</label>
+              {f.morningDelivery && (
+                <div className="grid sm:grid-cols-3 gap-3">
+                  <Field label="Order cut-off time" id="sh-mc" hint="Intha lopu order chesthe repu podduna"><input id="sh-mc" type="time" className="input" value={f.morningCutoff || '22:00'} onChange={(e) => setF({ ...f, morningCutoff: e.target.value })} /></Field>
+                  <Field label="Delivery time" id="sh-ms" hint="Customer ki kanipistundi"><input id="sh-ms" className="input" maxLength={40} value={f.morningSlot || ''} onChange={(e) => setF({ ...f, morningSlot: e.target.value })} placeholder="6 – 9 AM" /></Field>
+                  <Field label="Morning delivery charge (₹)" id="sh-mf" hint="0 = free"><input id="sh-mf" type="number" min="0" step="1" className="input" value={f.morningFee ?? 0} onChange={(e) => setF({ ...f, morningFee: e.target.value })} /></Field>
+                </div>
+              )}
+            </div>
+            <div className="flex flex-col gap-2 rounded-xl bg-red-50 p-3">
+              <label className="flex items-center gap-3 font-semibold"><input type="checkbox" className="w-5 h-5 accent-brand" checked={!!f.fastDelivery} onChange={(e) => setF({ ...f, fastDelivery: e.target.checked })} /> ⚡ Fast / Instant delivery (extra charge)</label>
+              {f.fastDelivery && (
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <Field label="Extra charge (₹)" id="sh-ff" hint={`Normal charge ₹${Number(f.deliveryFee) || 0} + idi`}><input id="sh-ff" type="number" min="0" step="1" className="input" value={f.fastFee ?? 0} onChange={(e) => setF({ ...f, fastFee: e.target.value })} /></Field>
+                  <Field label="Delivery time" id="sh-fe" hint="Customer ki kanipistundi"><input id="sh-fe" className="input" maxLength={40} value={f.fastEta || ''} onChange={(e) => setF({ ...f, fastEta: e.target.value })} placeholder="30 – 45 min" /></Field>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
         <div className="grid sm:grid-cols-3 gap-4">
-          {f.allowDelivery && <Field label="Delivery charge (₹)" id="sh-fee"><input id="sh-fee" type="number" min="0" step="1" className="input" value={f.deliveryFee} onChange={set('deliveryFee')} /></Field>}
           <Field label="Minimum order (₹)" id="sh-min"><input id="sh-min" type="number" min="0" step="1" className="input" value={f.minOrder} onChange={set('minOrder')} /></Field>
           <Field label="UPI ID (customers direct ga pay chestaru)" id="sh-upi" hint="e.g. srisai@okaxis"><input id="sh-upi" className="input" value={f.upiId} onChange={set('upiId')} /></Field>
           <Field label="New order WhatsApp alert number" id="sh-alert" hint="Kotha order vaste ee number ki WhatsApp msg. Khaali ga unte business number."><input id="sh-alert" inputMode="numeric" maxLength={10} className="input" value={f.orderAlertPhone || ''} onChange={set('orderAlertPhone')} /></Field>

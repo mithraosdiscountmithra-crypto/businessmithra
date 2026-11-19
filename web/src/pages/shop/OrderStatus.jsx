@@ -22,7 +22,7 @@ export default function OrderStatus() {
     let alive = true;
     const load = () => api(`/shop/order/${token}`).then((d) => { if (!alive) return; setData(d); addOrderToken(d.shop.slug, token); }).catch((e) => alive && setErr(e.message));
     load();
-    const t = setInterval(load, 30000);
+    const t = setInterval(load, 20000);
     return () => { alive = false; clearInterval(t); };
   }, [token, tick]);
   const payNow = async () => {
@@ -44,37 +44,67 @@ export default function OrderStatus() {
   if (!data) return <div className="min-h-screen flex items-center justify-center text-muted">Loading…</div>;
   const { order: o, shop } = data;
   const color = shop.color || '#3730A3';
-  const steps = STEPS[o.kind] || STEPS.order;
-  const at = steps.indexOf(o.status);
+  const at = Math.max(0, (STEPS[o.kind] || STEPS.order).indexOf(o.status));
   const isBooking = o.kind !== 'order';
   const what = o.kind === 'table' ? 'table booking' : o.kind === 'booking' ? 'booking' : 'order';
-  const lines = o.items.map((i) => `• ${i.name} × ${Number(i.qty)}`).join('\n');
-  const waText = `Namaste! Nenu ${what} chesanu: ${o.number}\n${o.kind === 'table' ? `${o.guests} people` : `${lines}\nTotal: ${inr(o.total)}`}\nPeru: ${o.name}\n${o.fulfilment === 'delivery' ? `Address: ${o.address}` : ''}${o.preferredAt ? `Time: ${new Date(o.preferredAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}` : ''}\n\nStatus: ${window.location.href}`;
+  const cap = (x) => x[0].toUpperCase() + x.slice(1);
+  const delivery = o.fulfilment === 'delivery';
+  const track = o.kind === 'order'
+    ? [
+      { key: 'new', label: 'Order received', icon: '📝' },
+      { key: 'confirmed', label: 'Shop confirmed – preparing', icon: '👨‍🍳' },
+      { key: 'ready', label: delivery ? 'Out for delivery 🛵' : 'Ready for pickup', icon: delivery ? '🛵' : '🛍️' },
+      { key: 'completed', label: delivery ? 'Delivered' : 'Picked up', icon: '🏠' },
+    ]
+    : [
+      { key: 'new', label: 'Request received', icon: '📝' },
+      { key: 'confirmed', label: 'Confirmed by shop', icon: '✅' },
+      { key: 'completed', label: 'Completed', icon: '🎉' },
+    ];
+  const MSG = {
+    new: isBooking ? 'Mee request shop ki vellindi. Shop confirm chestaru, dayachesi wait cheyyandi 🙏' : 'Mee order shop ki vellindi. Shop confirm chestunnaru, dayachesi wait cheyyandi 🙏',
+    confirmed: isBooking ? 'Mee booking confirm ayyindi ✅' : 'Mee order ready avtundi, dayachesi wait cheyyandi 🙏',
+    ready: delivery ? 'Mee order bayaluderindi 🛵 – tvaralo meeku chervutundi' : 'Mee order ready! Shop ki vachi teesukondi 🛍️',
+    completed: delivery ? 'Delivered. Thank you! 🙏' : 'Thank you! Malli randi 🙏',
+  };
+  const message = MSG[o.status] || MSG.new;
 
   return (
     <div className="min-h-screen bg-[#F6F6F8] py-6 px-4">
       <div className="max-w-lg mx-auto flex flex-col gap-4">
-        <div className="bg-white rounded-3xl border border-gray-200 p-6 flex flex-col gap-2 text-center">
-          <span className="mx-auto w-14 h-14 rounded-full flex items-center justify-center text-white text-2xl" style={{ background: o.status === 'cancelled' ? '#991B1B' : color }} aria-hidden="true">{o.status === 'cancelled' ? '×' : '✓'}</span>
-          <h1 className="text-xl font-extrabold">{o.status === 'cancelled' ? `${what[0].toUpperCase()}${what.slice(1)} cancelled` : `${isBooking ? `${what[0].toUpperCase()}${what.slice(1)} request` : 'Order'} received!`}</h1>
-          <p className="text-sm text-gray-600">{shop.name} · <strong>{o.number}</strong></p>
+        <div className="bg-white rounded-3xl border border-gray-200 p-6 flex flex-col gap-3">
+          <div className="text-center flex flex-col items-center gap-2">
+            <span className="w-16 h-16 rounded-full flex items-center justify-center text-white text-3xl" style={{ background: o.status === 'cancelled' ? '#991B1B' : '#16A34A' }} aria-hidden="true">{o.status === 'cancelled' ? '×' : '✓'}</span>
+            <h1 className="text-2xl font-extrabold">{o.status === 'cancelled' ? `${cap(what)} cancelled` : isBooking ? `${cap(what)} request received!` : 'Order received!'}</h1>
+            <p className="text-sm text-gray-600">{shop.name}</p>
+            <p className="text-lg">Order number: <b className="font-extrabold tracking-wide" style={{ color }}>{o.number}</b></p>
+            {o.deliveryNote && o.status !== 'cancelled' && <p className="text-sm font-semibold px-3 py-1.5 rounded-full bg-amber-50 text-amber-900">{o.deliverySpeed === 'morning' ? '🌅' : o.deliverySpeed === 'fast' ? '⚡' : '🛵'} {o.deliveryNote}</p>}
+          </div>
           {o.status !== 'cancelled' && (
-            <ol className="flex justify-between gap-1 pt-4" aria-label="Status">
-              {steps.map((s, i) => (
-                <li key={s} className="flex-1 flex flex-col items-center gap-1.5">
-                  <span className="w-full h-1.5 rounded-full" style={{ background: i <= at ? color : '#E5E7EB' }} />
-                  <span className={`text-[11px] ${i === at ? 'font-extrabold' : 'text-gray-500'}`}>{s === 'new' ? 'Received' : LABEL[s]}</span>
-                </li>
-              ))}
-            </ol>
+            <>
+              <p className="text-center font-semibold rounded-2xl p-3" style={{ background: `${color}14`, color }} role="status">{message}</p>
+              <ol className="flex flex-col pt-1" aria-label="Order tracking">
+                {track.map((t, i) => {
+                  const done = i < at;
+                  const now = i === at;
+                  return (
+                    <li key={t.key} className="flex gap-3">
+                      <div className="flex flex-col items-center">
+                        <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${now ? 'animate-pulse' : ''}`} style={done || now ? { background: color, color: '#fff' } : { background: '#E5E7EB', color: '#6B7280' }}>{done ? '✓' : t.icon}</span>
+                        {i < track.length - 1 && <span className="w-0.5 flex-1 min-h-[22px]" style={{ background: done ? color : '#E5E7EB' }} />}
+                      </div>
+                      <div className="pb-4">
+                        <p className={`text-sm ${now ? 'font-extrabold' : done ? 'font-semibold' : 'text-gray-500'}`}>{t.label}</p>
+                        {now && <p className="text-xs text-gray-500">Ippudu ikkada undi</p>}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+              <p className="text-center text-xs text-gray-500">Ee page automatic ga update avtundi 🔄</p>
+            </>
           )}
         </div>
-
-        {shop.phone && (
-          <a href={`https://wa.me/91${shop.phone}?text=${encodeURIComponent(waText)}`} target="_blank" rel="noreferrer" className="h-14 rounded-2xl bg-green-600 text-white font-bold flex items-center justify-center">
-            Send details to shop on WhatsApp
-          </a>
-        )}
 
         {o.kind === 'table' && (
           <div className="bg-white rounded-3xl border border-gray-200 p-5 text-center flex flex-col gap-1">
@@ -110,6 +140,7 @@ export default function OrderStatus() {
         </div>}
 
         <Link to={hostShop() ? '/' : `/s/${shop.slug}`} className="text-center font-semibold" style={{ color }}>← Back to {shop.name} · My Orders</Link>
+        {shop.phone && <p className="text-center text-sm text-gray-600">Emaina doubt unte <a className="font-bold" style={{ color }} href={`tel:${shop.phone}`}>📞 shop ki call cheyyandi</a></p>}
         <p className="text-center text-xs text-muted">Ee page ni bookmark cheyyandi – status ikkada update avutundi.</p>
       </div>
     </div>

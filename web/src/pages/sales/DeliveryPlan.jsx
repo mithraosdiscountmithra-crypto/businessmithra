@@ -225,7 +225,7 @@ export default function DeliveryPlan() {
                       <li key={p.id} className={`py-2 flex gap-3 text-sm ${picked === p.id ? 'bg-amber-50 -mx-2 px-2 rounded-lg' : ''}`}>
                         <span className="w-7 h-7 rounded-full text-white font-bold flex items-center justify-center shrink-0" style={{ background: COLORS[ai % COLORS.length] }}>{i + 1}</span>
                         <span className="flex-1 min-w-0">
-                          <b>{p.number}</b> · {p.name} <a className="text-brand font-semibold" href={`tel:${p.phone}`}>{p.phone}</a>
+                          <b>{p.number}</b>{p.deliverySpeed === 'fast' && <span className="ml-1 text-xs font-bold text-red-700">⚡ FAST</span>}{p.deliverySpeed === 'morning' && <span className="ml-1 text-xs font-bold text-amber-700">🌅 Morning</span>} · {p.name} <a className="text-brand font-semibold" href={`tel:${p.phone}`}>{p.phone}</a>
                           <span className="block text-xs text-muted truncate">{p.address}</span>
                           <span className="block text-xs">{p.items}</span>
                         </span>

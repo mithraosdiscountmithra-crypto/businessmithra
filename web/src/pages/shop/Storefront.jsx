@@ -212,7 +212,11 @@ export default function Storefront() {
   const cartCount = cartLines.reduce((a, l) => a + l.qty, 0);
   const itemsTotal = cartLines.reduce((a, l) => a + l.price * l.qty, 0);
   const memberOk = Boolean(benefits && getShopToken() && me?.phone === form.phone.trim());
-  const fee = form.fulfilment === 'delivery' && !(memberOk && benefits.freeDelivery) ? shop?.deliveryFee || 0 : 0;
+  const speeds = shop?.speeds || [];
+  const [speedKey, setSpeedKey] = useState('');
+  const speed = speeds.find((x) => x.key === speedKey) || speeds[0] || null;
+  const fastExtra = speed?.key === 'fast' ? Math.max(0, speed.fee - (shop?.deliveryFee || 0)) : 0;
+  const fee = form.fulfilment !== 'delivery' ? 0 : memberOk && benefits.freeDelivery ? fastExtra : speed ? speed.fee : shop?.deliveryFee || 0;
   const memberDisc = memberOk && benefits.discountPct ? Math.round(itemsTotal * benefits.discountPct) / 100 : 0;
   const [payChoice, setPayChoice] = useState('');
   const payOpts = !shop ? [] : [
@@ -376,7 +380,7 @@ export default function Storefront() {
         couponCode: kind === 'order' && coupon ? coupon.code : null,
         payChoice: kind === 'order' ? payNow : 'cod',
         guests: kind === 'table' ? Number(form.guests) : null,
-        ...(kind === 'order' && form.fulfilment === 'delivery' ? { lat: loc?.lat ?? null, lng: loc?.lng ?? null, landmark, saveAddress: saveAddr, addressLabel: addrLabel } : {}),
+        ...(kind === 'order' && form.fulfilment === 'delivery' ? { deliverySpeed: speed?.key || null, lat: loc?.lat ?? null, lng: loc?.lng ?? null, landmark, saveAddress: saveAddr, addressLabel: addrLabel } : {}),
         preferredAt: form.preferredAt ? new Date(form.preferredAt).toISOString() : '',
         items: kind === 'table' ? [] : kind === 'booking' ? [{ itemId: bookItem.id, variantId: firstInStock(bookItem), qty: 1 }] : cartLines.map((l) => ({ itemId: l.item.id, variantId: l.variant?.id || null, qty: l.qty })),
       };
@@ -857,6 +861,23 @@ export default function Storefront() {
               </fieldset>
             )}
             {contactAuth}
+            {form.fulfilment === 'delivery' && speeds.length > 1 && (
+              <fieldset className="flex flex-col gap-2">
+                <legend className="label">Delivery eppudu?</legend>
+                {speeds.map((x) => {
+                  const on = speed?.key === x.key;
+                  const icon = { normal: '🛵', morning: '🌅', fast: '⚡' }[x.key];
+                  return (
+                    <label key={x.key} className="flex items-center gap-3 rounded-xl border-2 p-3 cursor-pointer" style={{ borderColor: on ? color : '#E5E7EB' }}>
+                      <input type="radio" name="speed" className="w-5 h-5" checked={on} onChange={() => setSpeedKey(x.key)} style={{ accentColor: color }} />
+                      <span className="flex-1"><b className="block text-sm">{icon} {x.label}</b><span className="text-xs text-gray-600">{x.note}{x.key === 'morning' && x.cutoff ? ` · raatri ${x.cutoff} lopu order` : ''}</span></span>
+                      <b className="text-sm">{x.fee ? inr(x.fee) : 'FREE'}</b>
+                    </label>
+                  );
+                })}
+              </fieldset>
+            )}
+            {form.fulfilment === 'delivery' && speeds.length === 1 && speed && speed.key !== 'normal' && <p className="text-sm font-semibold">{speed.key === 'morning' ? '🌅' : '⚡'} {speed.label} – {speed.note}</p>}
             {form.fulfilment === 'delivery' && (
               <fieldset className="flex flex-col gap-3 rounded-2xl border border-gray-200 p-3">
                 <legend className="label px-1">Delivery address</legend>
@@ -925,7 +946,7 @@ export default function Storefront() {
               <div className="flex justify-between"><span>Items</span><span>{inr(itemsTotal)}</span></div>
               {couponOff > 0 && <div className="flex justify-between text-green-800 font-semibold"><span>🏷️ Coupon {coupon.code}</span><span>− {inr(couponOff)}</span></div>}
               {memberDisc > 0 && <div className="flex justify-between text-green-800 font-semibold"><span>⭐ {benefits.planName} ({benefits.discountPct}% off)</span><span>− {inr(memberDisc)}</span></div>}
-              {fee > 0 && <div className="flex justify-between"><span>Delivery</span><span>{inr(fee)}</span></div>}
+              {fee > 0 && <div className="flex justify-between"><span>{speed && speed.key !== 'normal' ? speed.label : 'Delivery'}</span><span>{inr(fee)}</span></div>}
               {memberOk && benefits.freeDelivery && form.fulfilment === 'delivery' && <div className="flex justify-between text-green-800 font-semibold"><span>⭐ Delivery</span><span>FREE</span></div>}
               <div className="flex justify-between text-base font-extrabold pt-1"><span>Total</span><span>{inr(Math.round(itemsTotal - memberDisc - couponOff + fee))}</span></div>
             </div>

@@ -103,7 +103,7 @@ export default function Orders() {
               <article key={o.id} className={`card p-4 flex flex-col gap-3 ${o.status === 'new' ? 'ring-2 ring-red-300' : ''}`}>
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="font-extrabold">{o.number} <span className="text-xs font-semibold text-muted">· {o.kind === 'table' ? `🍽️ Table for ${o.guests}` : o.kind === 'booking' ? 'Appointment' : o.fulfilment === 'delivery' ? '🚚 Home delivery' : '🥡 Takeaway'}</span></p>
+                    <p className="font-extrabold">{o.number} <span className="text-xs font-semibold text-muted">· {o.kind === 'table' ? `🍽️ Table for ${o.guests}` : o.kind === 'booking' ? 'Appointment' : o.fulfilment === 'delivery' ? (o.deliveryNote ? `${o.deliverySpeed === 'morning' ? '🌅' : o.deliverySpeed === 'fast' ? '⚡' : '🚚'} ${o.deliveryNote}` : '🚚 Home delivery') : '🥡 Takeaway'}</span></p>
                     <p className="text-sm">{o.customer ? <Link to={`/sales/customers/${o.customer.id}`} className="font-semibold text-brand">{o.name}</Link> : o.name} · {o.phone}</p>
                     <p className="text-xs text-muted">{fmtDateTime(o.createdAt)}</p>
                   </div>

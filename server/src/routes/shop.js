@@ -36,6 +36,31 @@ async function loadShop(slug) {
   return b;
 }
 
+// Delivery choices the vendor offers: normal, morning (order before cut-off → next morning), fast (extra charge).
+function istNow() {
+  const d = new Date(Date.now() + 5.5 * 3600000);
+  return { date: d.toISOString().slice(0, 10), mins: d.getUTCHours() * 60 + d.getUTCMinutes() };
+}
+function morningDay(b) {
+  const [h, m] = String(b.morningCutoff || '22:00').split(':').map(Number);
+  const now = istNow();
+  const before = now.mins < (h || 0) * 60 + (m || 0);
+  const day = new Date(`${now.date}T00:00:00Z`);
+  day.setUTCDate(day.getUTCDate() + (before ? 1 : 2));
+  return { label: before ? 'Tomorrow' : day.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }), date: day.toISOString().slice(0, 10) };
+}
+function deliverySpeeds(b) {
+  const out = [];
+  const base = num(b.deliveryFee);
+  if (b.normalDelivery !== false || (!b.morningDelivery && !b.fastDelivery)) out.push({ key: 'normal', label: 'Normal delivery', note: 'Same day', fee: base });
+  if (b.morningDelivery) {
+    const md = morningDay(b);
+    out.push({ key: 'morning', label: 'Morning delivery', note: `${md.label} ${b.morningSlot || ''}`.trim(), fee: num(b.morningFee), cutoff: b.morningCutoff });
+  }
+  if (b.fastDelivery) out.push({ key: 'fast', label: 'Fast delivery', note: b.fastEta || 'Quick', fee: base + num(b.fastFee) });
+  return out;
+}
+
 // Which ways a customer can pay at this shop (vendor turns each on/off). Never leaves the shop with none.
 function payOptions(b) {
   const onlinePay = Boolean(b.allowOnlinePay && shopKeys(b));
@@ -48,6 +73,7 @@ const publicBusiness = (b) => ({
   name: b.name, slug: b.slug, type: b.type, tagline: b.shopTagline, about: b.shopAbout, logo: b.shopLogo, cover: b.shopCover,
   color: b.shopColor, timings: b.shopTimings, phone: b.phone, address: b.address, city: b.city, state: b.state,
   ...payOptions(b), allowPickup: b.allowPickup, allowDelivery: b.allowDelivery, deliveryFee: num(b.deliveryFee),
+  speeds: deliverySpeeds(b),
   minOrder: num(b.minOrder), allowBooking: b.allowBooking, allowTable: b.allowTable, otp: otpEnabled(),
   ...(b.showLocation === false ? { lat: null, lng: null, mapUrl: null } : { lat: b.shopLat, lng: b.shopLng, mapUrl: b.shopMapUrl }),
   gallery: b.shopGallery || [], template: b.shopTemplate || 'classic', since: b.shopSince || null, instagram: b.shopInstagram, facebook: b.shopFacebook, youtube: b.shopYoutube,
@@ -94,6 +120,7 @@ const orderSchema = z.object({
   address: z.string().trim().max(400).optional().nullable().or(z.literal('')).transform((v) => v || null),
   note: z.string().trim().max(500).optional().nullable().or(z.literal('')).transform((v) => v || null),
   fulfilment: z.enum(['pickup', 'delivery']).default('pickup'),
+  deliverySpeed: z.enum(['normal', 'morning', 'fast']).optional().nullable(),
   lat: z.preprocess((v) => (v === null || v === '' || v === undefined ? null : Number(v)), z.number().min(-90).max(90).nullable()),
   lng: z.preprocess((v) => (v === null || v === '' || v === undefined ? null : Number(v)), z.number().min(-180).max(180).nullable()),
   landmark: z.string().trim().max(120).optional().nullable().or(z.literal('')).transform((v) => v || null),
@@ -169,7 +196,12 @@ router.post('/:slug/orders', writeLimiter, h(async (req, res) => {
     c = computeDoc({ items: lines, discount: r2(memberDiscount + cp.off / ratio), interState: false });
     itemsTotal = r2(c.subtotal - c.discount + c.taxTotal);
   }
-  const deliveryFee = d.kind === 'order' && d.fulfilment === 'delivery' && !benefits?.freeDelivery ? num(b.deliveryFee) : 0;
+  const isDelivery = d.kind === 'order' && d.fulfilment === 'delivery';
+  const speeds = deliverySpeeds(b);
+  const speed = isDelivery ? speeds.find((x) => x.key === (d.deliverySpeed || speeds[0]?.key)) : null;
+  if (isDelivery && !speed) throw new HttpError(400, 'This delivery option is not available. Please choose another.');
+  // Members with free delivery still pay the extra for fast delivery.
+  const deliveryFee = !isDelivery ? 0 : benefits?.freeDelivery ? (speed.key === 'fast' ? num(b.fastFee) : 0) : speed.fee;
   const memberNote = [
     benefits && (memberDiscount > 0 || (benefits.freeDelivery && d.fulfilment === 'delivery'))
       ? `${benefits.planName} member${benefits.discountPct ? ` · ${benefits.discountPct}% off` : ''}${benefits.freeDelivery && d.fulfilment === 'delivery' ? ' · free delivery' : ''}`
@@ -201,6 +233,8 @@ router.post('/:slug/orders', writeLimiter, h(async (req, res) => {
         token: crypto.randomBytes(16).toString('hex'),
         customerId, name: d.name, phone: d.phone, address: d.address, note: d.note,
         fulfilment: d.kind === 'order' ? d.fulfilment : 'pickup',
+        deliverySpeed: speed?.key || null,
+        deliveryNote: speed ? `${speed.label} – ${speed.note}` : null,
         lat: d.fulfilment === 'delivery' ? d.lat ?? null : null,
         lng: d.fulfilment === 'delivery' ? d.lng ?? null : null,
         preferredAt: d.preferredAt,
@@ -212,7 +246,7 @@ router.post('/:slug/orders', writeLimiter, h(async (req, res) => {
   await logActivity(b.id, null, 'online_order', 'shop_order', order.id);
   if (cp) await prisma.coupon.update({ where: { id: cp.coupon.id }, data: { usedCount: { increment: 1 } } });
   // WhatsApp alert to the shop owner (AiSensy template: {{1}} shop, {{2}} order no, {{3}} customer, {{4}} details).
-  const what = d.kind === 'table' ? `Table for ${d.guests || ''}` : d.kind === 'booking' ? 'Booking' : `₹${num(total)} · ${d.fulfilment === 'delivery' ? 'Delivery' : 'Pickup'}`;
+  const what = d.kind === 'table' ? `Table for ${d.guests || ''}` : d.kind === 'booking' ? 'Booking' : `₹${num(total)} · ${speed ? `${speed.label} (${speed.note})` : 'Pickup'}`;
   sendTemplate({ campaignEnv: 'AISENSY_ORDER_CAMPAIGN', phone: b.orderAlertPhone || b.phone, userName: b.name, params: [b.name, order.number, `${d.name} (${d.phone})`, what] }).catch(() => {});
 
   // Save the delivery address for this verified mobile, for next time.
@@ -439,7 +473,7 @@ router.get('/order/:token', h(async (req, res) => {
   res.json({
     order: {
       number: o.number, kind: o.kind, guests: o.guests, status: o.status, name: o.name, phone: o.phone, address: o.address, note: o.note,
-      fulfilment: o.fulfilment, preferredAt: o.preferredAt, subtotal: o.subtotal, discount: o.discount, memberNote: o.memberNote, taxTotal: o.taxTotal, deliveryFee: o.deliveryFee,
+      fulfilment: o.fulfilment, deliverySpeed: o.deliverySpeed, deliveryNote: o.deliveryNote, preferredAt: o.preferredAt, subtotal: o.subtotal, discount: o.discount, memberNote: o.memberNote, taxTotal: o.taxTotal, deliveryFee: o.deliveryFee,
       total: o.total, paymentStatus: o.paymentStatus, paymentMode: o.paymentMode, payChoice: o.payChoice, createdAt: o.createdAt,
       canPayOnline: o.kind === 'order' && o.paymentStatus !== 'paid' && o.status !== 'cancelled' && Boolean(b.allowOnlinePay && shopKeys(b)),
       items: o.items.map((i) => ({ name: i.name, qty: i.qty, unit: i.unit, lineTotal: r2(num(i.amount) + num(i.taxAmount)) })),

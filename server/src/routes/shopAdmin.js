@@ -31,6 +31,8 @@ const shopFields = (b) => ({
   shopCover: b.shopCover || '', shopColor: b.shopColor, shopTimings: b.shopTimings || '', upiId: b.upiId || '', orderAlertPhone: b.orderAlertPhone || '',
   allowPickup: b.allowPickup, allowDelivery: b.allowDelivery, deliveryFee: num(b.deliveryFee), minOrder: num(b.minOrder), allowBooking: b.allowBooking,
   allowTable: b.allowTable, shopLat: b.shopLat, shopLng: b.shopLng, shopMapUrl: b.shopMapUrl || '',
+  normalDelivery: b.normalDelivery !== false, morningDelivery: b.morningDelivery, morningFee: Number(b.morningFee) || 0, morningCutoff: b.morningCutoff || '22:00', morningSlot: b.morningSlot || '6 – 9 AM',
+  fastDelivery: b.fastDelivery, fastFee: Number(b.fastFee) || 0, fastEta: b.fastEta || '30 – 45 min',
   showLocation: b.showLocation !== false, shopGallery: b.shopGallery || [], shopTemplate: b.shopTemplate || 'classic', shopSince: b.shopSince || '', shopInstagram: b.shopInstagram || '', shopFacebook: b.shopFacebook || '', shopYoutube: b.shopYoutube || '',
   customDomain: b.customDomain || '', customDomainStatus: b.customDomainStatus || null,
   allowOnlinePay: b.allowOnlinePay, allowCod: b.allowCod, allowUpiPay: b.allowUpiPay, rzpKeyId: b.rzpKeyId || '', rzpSecretSaved: Boolean(b.rzpKeySecret),
@@ -60,6 +62,14 @@ const settingsSchema = z.object({
   shopLat: z.preprocess((v) => (v === null || v === '' || v === undefined ? null : Number(v)), z.number().min(-90).max(90).nullable()),
   shopLng: z.preprocess((v) => (v === null || v === '' || v === undefined ? null : Number(v)), z.number().min(-180).max(180).nullable()),
   showLocation: z.boolean().optional(),
+  normalDelivery: z.boolean().optional(),
+  morningDelivery: z.boolean().optional(),
+  morningFee: z.coerce.number().min(0).max(10000).optional(),
+  morningCutoff: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Cut-off time like 22:00').optional(),
+  morningSlot: z.string().trim().min(1).max(40).optional(),
+  fastDelivery: z.boolean().optional(),
+  fastFee: z.coerce.number().min(0).max(10000).optional(),
+  fastEta: z.string().trim().min(1).max(40).optional(),
   shopTemplate: z.enum(['classic', 'modern', 'bold', 'elegant', 'fresh']).optional(),
   shopSince: z.preprocess((v) => (v === '' || v === null || v === undefined ? null : Number(v)), z.number().int().min(1900).max(2100).nullable()).optional(),
   shopGallery: z.array(z.string().trim().max(500).regex(/^https:\/\//)).max(8).optional(),
@@ -120,6 +130,7 @@ async function coordsFromMapLink(url) {
 router.put('/settings', requireOwner, h(async (req, res) => {
   const d = settingsSchema.parse(req.body);
   if (!d.allowPickup && !d.allowDelivery && !d.allowBooking && !d.allowTable) throw new HttpError(400, 'Turn on at least one: takeaway, delivery, table booking or appointment');
+  if (d.allowDelivery && d.normalDelivery === false && !d.morningDelivery && !d.fastDelivery) throw new HttpError(400, 'Turn on at least one delivery type: normal, morning or fast');
   const dup = await prisma.business.findFirst({ where: { slug: d.slug, NOT: { id: req.businessId } } });
   if (dup) throw new HttpError(409, 'This shop link is already taken. Try another.');
   // Only a Google Maps link given? Read the location (lat, lng) from it for distance & routes.
@@ -211,7 +222,7 @@ router.get('/delivery-plan', requirePermission('sales', 'view'), h(async (req, r
   res.json({
     shop: { name: b.name, lat: b.shopLat, lng: b.shopLng, address: [b.address, b.city].filter(Boolean).join(', ') },
     orders: orders.map((o) => ({
-      id: o.id, number: o.number, name: o.name, phone: o.phone, address: o.address, lat: o.lat, lng: o.lng, status: o.status,
+      id: o.id, number: o.number, name: o.name, phone: o.phone, address: o.address, lat: o.lat, lng: o.lng, status: o.status, deliveryNote: o.deliveryNote, deliverySpeed: o.deliverySpeed,
       total: o.total, paymentStatus: o.paymentStatus, payChoice: o.payChoice, createdAt: o.createdAt,
       items: o.items.map((i) => `${i.name} × ${Number(i.qty)}`).join(', '),
     })),

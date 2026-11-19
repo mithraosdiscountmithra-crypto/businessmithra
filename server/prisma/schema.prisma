@@ -54,6 +54,15 @@ model Business {
   nextOrderNo   Int            @default(1)
   nextCreditNo  Int            @default(1)
   shopGallery   String[]       @default([]) // photos for the shop website
+  // Delivery speeds (vendor chooses which to offer and the charges)
+  normalDelivery Boolean       @default(true)
+  morningDelivery Boolean      @default(false)
+  morningFee    Decimal        @default(0) @db.Decimal(10, 2)
+  morningCutoff String         @default("22:00") // order before this time → delivered next morning
+  morningSlot   String         @default("6 – 9 AM")
+  fastDelivery  Boolean        @default(false)
+  fastFee       Decimal        @default(0) @db.Decimal(10, 2) // extra on top of the normal delivery fee
+  fastEta       String         @default("30 – 45 min")
   showLocation  Boolean        @default(true) // false = location used only for delivery planning, hidden from customers
   shopTemplate  String         @default("classic") // website design: classic, modern, bold, elegant, fresh
   shopSince     Int?           // year started (shown as trust badge)
@@ -461,7 +470,9 @@ model ShopOrder {
   total         Decimal          @default(0) @db.Decimal(12, 2)
   paymentStatus String           @default("unpaid") // unpaid, paid
   paymentMode   String?
-  payChoice     String           @default("cod") // online, cod
+  payChoice     String           @default("cod") // online, upi, cod
+  deliverySpeed String?          // normal, morning, fast
+  deliveryNote  String?          // e.g. "Tomorrow 6 – 9 AM" / "Fast – 30 – 45 min"
   rzpOrderId    String?
   rzpPaymentId  String?
   invoiceId     String?
