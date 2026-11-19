@@ -91,11 +91,42 @@ router.put('/domain', requireOwner, h(async (req, res) => {
   res.json({ customDomain: b.customDomain, customDomainStatus: b.customDomainStatus });
 }));
 
+function coordsIn(text) {
+  const t = decodeURIComponent(String(text || ''));
+  const m = /!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/.exec(t) || /@(-?\d+\.\d+),(-?\d+\.\d+)/.exec(t) || /[?&](?:q|query|ll|destination|center)=(-?\d+\.\d+),\s*(-?\d+\.\d+)/.exec(t);
+  if (!m) return null;
+  const lat = Number(m[1]);
+  const lng = Number(m[2]);
+  return Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? { lat, lng } : null;
+}
+
+// Short links (maps.app.goo.gl) are followed to the full Google Maps address, which has the coordinates.
+async function coordsFromMapLink(url) {
+  let cur = url;
+  for (let i = 0; i < 4; i += 1) {
+    const hit = coordsIn(cur);
+    if (hit) return hit;
+    const r = await fetch(cur, { redirect: 'manual', signal: AbortSignal.timeout(5000), headers: { 'User-Agent': 'Mozilla/5.0' } });
+    const next = r.headers.get('location');
+    if (!next) {
+      const body = r.status === 200 ? (await r.text()).slice(0, 200000) : '';
+      return coordsIn(body);
+    }
+    cur = new URL(next, cur).toString();
+  }
+  return coordsIn(cur);
+}
+
 router.put('/settings', requireOwner, h(async (req, res) => {
   const d = settingsSchema.parse(req.body);
   if (!d.allowPickup && !d.allowDelivery && !d.allowBooking && !d.allowTable) throw new HttpError(400, 'Turn on at least one: takeaway, delivery, table booking or appointment');
   const dup = await prisma.business.findFirst({ where: { slug: d.slug, NOT: { id: req.businessId } } });
   if (dup) throw new HttpError(409, 'This shop link is already taken. Try another.');
+  // Only a Google Maps link given? Read the location (lat, lng) from it for distance & routes.
+  if (d.shopMapUrl && (d.shopLat === null || d.shopLat === undefined)) {
+    const pt = await coordsFromMapLink(d.shopMapUrl).catch(() => null);
+    if (pt) Object.assign(d, { shopLat: pt.lat, shopLng: pt.lng });
+  }
   const b = await prisma.business.update({ where: { id: req.businessId }, data: d });
   await logActivity(req.businessId, req.user.id, 'update', 'shop', b.id);
   res.json({ settings: shopFields(b) });

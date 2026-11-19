@@ -196,7 +196,12 @@ export default function DeliveryPlan() {
       </div>
       {!plan ? <p className="text-muted">Loading…</p> : (
         <>
-          {!plan.shop && <p className="text-sm bg-amber-50 border border-amber-200 rounded-xl p-3">Online Shop settings lo <b>shop location</b> add cheyyandi – appude shop nunchi distance, route correct ga vastayi.</p>}
+          {!plan.shop && (
+            <div className="text-sm bg-amber-50 border border-amber-200 rounded-xl p-3 flex flex-wrap items-center justify-between gap-2">
+              <span>Shop location save avvaledu. <b>Online Shop → 📍 Shop location</b> lo "Use my current location" nokki, page kindha <b>Save</b> nokkandi.</span>
+              <Link to="/shop" className="btn-primary h-9 px-3">📍 Location set cheyyandi</Link>
+            </div>
+          )}
           {plan.areas.length === 0 && plan.noGps.length === 0 && <p className="card p-8 text-center text-muted">Delivery orders levu 🎉</p>}
           {plan.areas.length > 0 && <DeliveryMap shop={data.shop} areas={plan.areas} onPick={setPicked} />}
           <div className="grid lg:grid-cols-2 gap-4">
