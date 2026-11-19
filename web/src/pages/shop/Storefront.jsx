@@ -476,7 +476,9 @@ export default function Storefront() {
 
   const verified = Boolean(me && getShopToken() && me.phone === form.phone.trim());
   const ready = Boolean(me && (!shop.otp || verified) && me.phone === form.phone.trim());
-  const cta = (base) => (ready || !shop.otp ? base : otpStep ? `Verify OTP & ${base}` : 'Send OTP & continue');
+  const SHORT = { 'Place order': 'Order', 'Request booking': 'Book', 'Join now': 'Join', 'Book table': 'Book table' };
+  const cta = (base) => (ready || !shop.otp ? base : `OTP & ${SHORT[base] || base}`);
+  const otpAction = sheet === 'table' ? 'Book table' : sheet === 'member' ? 'Join' : sheet?.type === 'book' ? 'Book' : 'Order';
 
   const contactAuth = ready ? (
     <p className="text-sm bg-gray-50 rounded-xl p-3">
@@ -488,10 +490,24 @@ export default function Storefront() {
       <div><label className="label" htmlFor="s-name">Mee peru</label><input id="s-name" required className="input" value={form.name} onChange={setF('name')} autoComplete="name" disabled={otpStep} /></div>
       <div><label className="label" htmlFor="s-phone">{shop.otp ? 'WhatsApp number' : 'Mobile number'}</label><input id="s-phone" required inputMode="numeric" maxLength={10} className="input" value={form.phone} onChange={setF('phone')} autoComplete="tel-national" disabled={otpStep} /></div>
       {otpStep && (
-        <div className="flex flex-col gap-2 rounded-xl bg-green-50 p-3">
-          <label className="label mb-0" htmlFor="s-otp">WhatsApp lo vachina 6-digit OTP</label>
-          <input id="s-otp" required inputMode="numeric" autoComplete="one-time-code" maxLength={6} className="input text-center text-2xl tracking-[0.5em] font-bold h-14" value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))} autoFocus />
-          <p className="text-xs text-muted">+91 {form.phone} ki pampamu · <button type="button" className="underline font-semibold" onClick={() => { setOtpStep(false); setFormErr(''); }}>Number marchandi</button> · <button type="button" className="underline font-semibold" onClick={resendOtp}>Malli pampandi</button></p>
+        // OTP popup on top of the screen. Its button submits the same form (verify + place order).
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="otp-title">
+          <div className="bg-white w-full max-w-sm rounded-3xl p-6 flex flex-col gap-4 shadow-2xl">
+            <div className="text-center flex flex-col items-center gap-2">
+              <span className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center text-3xl" aria-hidden="true">📲</span>
+              <h2 id="otp-title" className="text-xl font-extrabold">OTP pampamu!</h2>
+              <p className="text-sm text-gray-600">Mee WhatsApp <b>+91 {form.phone}</b> ki 6-digit OTP pampamu. Kindha enter cheyyandi.</p>
+            </div>
+            <label className="sr-only" htmlFor="s-otp">WhatsApp OTP</label>
+            <input id="s-otp" required inputMode="numeric" autoComplete="one-time-code" maxLength={6} className="input text-center text-3xl tracking-[0.5em] font-bold h-16" value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))} autoFocus placeholder="••••••" />
+            {formErr && <p className="text-sm font-semibold text-red-700 text-center" role="alert">{formErr}</p>}
+            <button type="submit" disabled={busy || otp.length < 6} className="h-14 rounded-2xl text-white font-bold text-base disabled:opacity-50" style={{ background: color }}>{busy ? 'Checking…' : `✅ Verify & ${otpAction}`}</button>
+            <div className="flex justify-between text-sm">
+              <button type="button" className="underline font-semibold text-gray-700" onClick={() => { setOtpStep(false); setFormErr(''); }}>Number marchandi</button>
+              <button type="button" className="underline font-semibold text-gray-700" onClick={resendOtp}>OTP malli pampandi</button>
+            </div>
+            <p className="text-xs text-center text-gray-500">Okkasari verify chesthe malli adagamu.</p>
+          </div>
         </div>
       )}
       {shop.otp && !otpStep && <p className="text-xs text-muted">Kotha number ayithe okkasari matrame WhatsApp lo OTP vastundi.</p>}
@@ -916,7 +932,7 @@ export default function Storefront() {
             {shop.minOrder > 0 && itemsTotal < shop.minOrder && <p className="text-sm font-semibold text-orange-800">Minimum order {inr(shop.minOrder)}. Inka {inr(shop.minOrder - itemsTotal)} add cheyyandi.</p>}
             {formErr && <p className="error-box" role="alert">{formErr}</p>}
             <button type="submit" disabled={busy || (shop.minOrder > 0 && itemsTotal < shop.minOrder)} className="h-14 rounded-2xl text-white font-bold text-base disabled:opacity-60" style={{ background: color }}>
-              {busy ? 'Please wait…' : payNow === 'online' ? `Pay ${inr(Math.round(itemsTotal - memberDisc - couponOff + fee))} & place order` : cta('Place order')}
+              {busy ? 'Please wait…' : shop.otp && !ready ? cta('Place order') : payNow === 'online' ? `Pay ${inr(Math.round(itemsTotal - memberDisc - couponOff + fee))} & place order` : cta('Place order')}
             </button>
             <p className="text-xs text-center text-muted">Order ayyaka shop vaallu confirm chestaru.{shop.upi ? ' UPI tho ventane pay cheyyochu.' : ''}</p>
           </form>
