@@ -600,11 +600,10 @@ export default function Storefront() {
         <div className="max-w-6xl mx-auto px-4 py-5 grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
           {[
             shop.allowPickup && ['🥡', 'Takeaway', 'Order & pick up'],
-            shop.allowDelivery && ['🚚', 'Home delivery', shop.deliveryFee ? `₹${shop.deliveryFee} delivery` : 'Free delivery'],
+            shop.allowDelivery && ['🚚', 'Home delivery', 'Door step delivery'],
             shop.allowTable && ['🍽️', 'Table booking', 'Reserve in advance'],
             shop.allowBooking && ['📅', 'Appointments', 'Book a slot'],
             shop.onlinePay && ['💳', 'Pay online', 'UPI · Cards'],
-            shop.minOrder > 0 && ['🧾', 'Min. order', inr(shop.minOrder)],
           ].filter(Boolean).slice(0, 4).map(([i, t, sub], n) => (
             <div key={t} className="flex items-center gap-3 rounded-2xl p-3" style={{ background: n % 2 ? tint(color, 0.08) : `color-mix(in srgb, ${color2} 12%, white)` }}>
               <span className="w-11 h-11 rounded-xl flex items-center justify-center text-2xl bg-white shadow-sm shrink-0" aria-hidden="true">{i}</span>
@@ -614,15 +613,16 @@ export default function Storefront() {
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-4 pt-4 flex flex-wrap gap-2 text-sm">
+      <div className="max-w-6xl mx-auto px-4 pt-4 flex flex-nowrap items-center gap-2 text-sm overflow-x-auto [scrollbar-width:none]">
+          {shop.minOrder > 0 && <span className="h-10 px-4 rounded-xl font-bold flex items-center whitespace-nowrap shrink-0" style={{ background: tint(color, 0.1), color }}>🧾 Min order {inr(shop.minOrder)}</span>}
+          <button type="button" onClick={() => { setSent(false); setSheet({ type: 'ask' }); }} className="h-10 px-4 rounded-xl bg-white border border-gray-300 font-bold whitespace-nowrap shrink-0">💬 Ask a question</button>
+          <button type="button" onClick={openMyOrders} className="h-10 px-4 rounded-xl bg-white border border-gray-300 font-bold whitespace-nowrap shrink-0">📦 My Orders</button>
           {data.memberPlans?.length > 0 && (
-            <button type="button" onClick={() => { setFormErr(''); setJoinPlan(null); setJoinResult(null); setSheet('member'); }} className="h-10 px-4 rounded-xl font-bold border-2" style={{ borderColor: '#F59E0B', background: benefits ? '#FEF3C7' : '#fff', color: '#92400E' }}>
+            <button type="button" onClick={() => { setFormErr(''); setJoinPlan(null); setJoinResult(null); setSheet('member'); }} className="h-10 px-4 rounded-xl font-bold border-2 whitespace-nowrap shrink-0" style={{ borderColor: '#F59E0B', background: benefits ? '#FEF3C7' : '#fff', color: '#92400E' }}>
               {benefits ? `⭐ ${benefits.planName}` : '⭐ Membership'}
             </button>
           )}
-          <button type="button" onClick={() => { setSent(false); setSheet({ type: 'ask' }); }} className="h-10 px-4 rounded-xl bg-white border border-gray-300 font-bold">Ask a question</button>
-          <InstallButton className="h-10 px-4 rounded-xl bg-white border border-gray-300 font-bold" label="📲 Add to home screen" />
-          {<button type="button" onClick={openMyOrders} className="h-10 px-4 rounded-xl bg-white border border-gray-300 font-bold">My Orders</button>}
+          <InstallButton className="h-10 px-4 rounded-xl bg-white border border-gray-300 font-bold whitespace-nowrap shrink-0" label="📲 Add to home screen" />
       </div>
         {data.offers?.length > 0 && (
           <section id="offers" className="max-w-6xl mx-auto px-4 pt-4 flex gap-2 overflow-x-auto scroll-mt-20">
@@ -635,10 +635,16 @@ export default function Storefront() {
           </section>
         )}
         {me && (
-          <p className="max-w-6xl mx-auto px-4 pt-2 text-xs text-gray-600">
-            Namaste <strong>{me.name}</strong> ({me.phone}) ·{' '}
-            <button type="button" className="underline font-semibold" onClick={() => { clearMe(); setShopToken(null); api('/shop/me/forget', { method: 'POST' }).catch(() => {}); setMeState(null); setOtpStep(false); setForm((f) => ({ ...f, name: '', phone: '' })); }}>Not you?</button>
-          </p>
+          <div className="max-w-6xl mx-auto px-4 pt-4">
+            <div className="flex items-center gap-3 rounded-2xl bg-white border border-gray-200 p-3 shadow-sm">
+              <span className="w-12 h-12 rounded-full flex items-center justify-center text-white text-xl font-extrabold shrink-0" style={{ background: color }} aria-hidden="true">{(me.name || '?').slice(0, 1).toUpperCase()}</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-lg sm:text-xl font-extrabold truncate">👋 Namaste, {me.name}!</p>
+                <p className="text-base text-gray-600">📱 {me.phone}</p>
+              </div>
+              <button type="button" className="text-sm underline font-semibold text-gray-600 shrink-0" onClick={() => { clearMe(); setShopToken(null); api('/shop/me/forget', { method: 'POST' }).catch(() => {}); setMeState(null); setOtpStep(false); setForm((f) => ({ ...f, name: '', phone: '' })); }}>Not you?</button>
+            </div>
+          </div>
         )}
         {benefits && (
           <p className="max-w-6xl mx-auto px-4 pt-2 text-sm font-semibold text-amber-900">
