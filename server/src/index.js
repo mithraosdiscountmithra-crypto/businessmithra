@@ -174,7 +174,7 @@ if (fs.existsSync(webDist)) {
           '@type': b.type === 'restaurant' ? 'Restaurant' : 'LocalBusiness',
           name: b.name, url, telephone: b.phone ? `+91${b.phone}` : undefined, image: img || undefined, description: desc,
           address: b.address || b.city ? { '@type': 'PostalAddress', streetAddress: b.address || undefined, addressLocality: b.city || undefined, addressRegion: b.state || undefined, addressCountry: 'IN' } : undefined,
-          geo: b.shopLat ? { '@type': 'GeoCoordinates', latitude: b.shopLat, longitude: b.shopLng } : undefined,
+          geo: b.shopLat && b.showLocation !== false ? { '@type': 'GeoCoordinates', latitude: b.shopLat, longitude: b.shopLng } : undefined,
           openingHours: b.shopTimings || undefined,
         };
         const head = [

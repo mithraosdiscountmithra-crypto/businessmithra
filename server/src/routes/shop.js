@@ -48,7 +48,7 @@ const publicBusiness = (b) => ({
   color: b.shopColor, timings: b.shopTimings, phone: b.phone, address: b.address, city: b.city, state: b.state,
   ...payOptions(b), allowPickup: b.allowPickup, allowDelivery: b.allowDelivery, deliveryFee: num(b.deliveryFee),
   minOrder: num(b.minOrder), allowBooking: b.allowBooking, allowTable: b.allowTable, otp: otpEnabled(),
-  lat: b.shopLat, lng: b.shopLng, mapUrl: b.shopMapUrl,
+  ...(b.showLocation === false ? { lat: null, lng: null, mapUrl: null } : { lat: b.shopLat, lng: b.shopLng, mapUrl: b.shopMapUrl }),
   gallery: b.shopGallery || [], template: b.shopTemplate || 'classic', since: b.shopSince || null, instagram: b.shopInstagram, facebook: b.shopFacebook, youtube: b.shopYoutube,
   ownDomain: b.customDomainStatus === 'live' ? b.customDomain : null,
 });

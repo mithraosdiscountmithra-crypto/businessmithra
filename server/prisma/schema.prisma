@@ -54,6 +54,7 @@ model Business {
   nextOrderNo   Int            @default(1)
   nextCreditNo  Int            @default(1)
   shopGallery   String[]       @default([]) // photos for the shop website
+  showLocation  Boolean        @default(true) // false = location used only for delivery planning, hidden from customers
   shopTemplate  String         @default("classic") // website design: classic, modern, bold, elegant, fresh
   shopSince     Int?           // year started (shown as trust badge)
   shopInstagram String?

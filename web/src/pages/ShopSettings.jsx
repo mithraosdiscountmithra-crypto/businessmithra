@@ -232,7 +232,7 @@ export default function ShopSettings() {
 
       <section className="card p-5 flex flex-col gap-4">
         <div>
-          <h2 className="text-lg font-bold">📍 Shop location (Directions kosam)</h2>
+          <h2 className="text-lg font-bold">📍 Shop location (Directions & delivery kosam)</h2>
           <p className="text-sm text-muted">Shop lo nilabadi "Use my current location" tap cheyyandi. Leda Google Maps lo mee shop open chesi <strong>Share → Copy link</strong> chesi paste cheyyandi.</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -242,6 +242,11 @@ export default function ShopSettings() {
         </div>
         {locMsg && <p className="text-sm font-semibold">{locMsg}</p>}
         <Field label="Leda Google Maps link" id="sh-map" hint="e.g. https://maps.app.goo.gl/…"><input id="sh-map" className="input" value={f.shopMapUrl} onChange={set('shopMapUrl')} /></Field>
+        <label className="flex items-start gap-3 rounded-xl border border-line p-3">
+          <input type="checkbox" className="w-5 h-5 mt-0.5 accent-brand" checked={f.showLocation !== false} onChange={(e) => setF({ ...f, showLocation: e.target.checked })} />
+          <span><b>Customers ki location chupinchu</b>
+            <span className="block text-xs text-muted">Off chesthe shop website lo map, Directions buttons raavu. Location mee Delivery plan (route, distance) kosam matrame vaadatam.</span></span>
+        </label>
       </section>
 
       <section className="card p-5 flex flex-col gap-4">
