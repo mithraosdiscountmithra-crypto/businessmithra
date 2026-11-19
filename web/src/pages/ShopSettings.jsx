@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { api } from '../api.js';
 import { ErrorBox, Field, PageHeader } from '../components/ui.jsx';
 import ImageUpload from '../components/ImageUpload.jsx';
+import { useAuth } from '../auth.jsx';
+import { autoAbout, autoTagline } from '../lib/shopTheme.js';
 
 const COLORS = ['#3730A3', '#C2410C', '#0F766E', '#BE185D', '#1D4ED8', '#7C2D12', '#111827'];
 
@@ -53,6 +55,7 @@ function PaymentsCard({ initial }) {
 }
 
 export default function ShopSettings() {
+  const { me } = useAuth();
   const [f, setF] = useState(null);
   const [err, setErr] = useState('');
   const [ok, setOk] = useState('');
@@ -200,6 +203,15 @@ export default function ShopSettings() {
             <Field label="Instagram link" id="sh-ig"><input id="sh-ig" className="input" value={f.shopInstagram || ''} onChange={(e) => setF({ ...f, shopInstagram: e.target.value })} placeholder="https://instagram.com/…" /></Field>
             <Field label="Facebook page link" id="sh-fb"><input id="sh-fb" className="input" value={f.shopFacebook || ''} onChange={(e) => setF({ ...f, shopFacebook: e.target.value })} placeholder="https://facebook.com/…" /></Field>
             <Field label="YouTube link" id="sh-yt"><input id="sh-yt" className="input" value={f.shopYoutube || ''} onChange={(e) => setF({ ...f, shopYoutube: e.target.value })} placeholder="https://youtube.com/…" /></Field>
+          </div>
+          <div className="sm:col-span-2 flex flex-wrap items-center justify-between gap-2 rounded-xl p-3" style={{ background: 'linear-gradient(90deg,#EEF2FF,#FDF2F8)' }}>
+            <span className="text-sm"><b>✨ Auto write</b> – mee business type, peru, city, items batti professional tagline + about raastundi. Taruvatha marchukovachu.</span>
+            <button type="button" className="btn-ghost h-10 bg-white" onClick={async () => {
+              let categories = [];
+              try { const r = await api('/items'); categories = [...new Set((r.items || []).filter((i) => i.showInShop !== false).map((i) => i.category).filter(Boolean))]; } catch { /* ignore */ }
+              const info = { name: me.business.name, type: me.business.type, city: me.business.city, categories, allowDelivery: f.allowDelivery, allowPickup: f.allowPickup, allowTable: f.allowTable, allowBooking: f.allowBooking, onlinePay: f.allowOnlinePay };
+              setF({ ...f, shopTagline: autoTagline(info), shopAbout: autoAbout(info) });
+            }}>✨ Write for me</button>
           </div>
           <Field label="Tagline" id="sh-tag" className="sm:col-span-2"><input id="sh-tag" className="input" maxLength={120} value={f.shopTagline} onChange={set('shopTagline')} placeholder="e.g. Pure silk & cotton sarees since 1995" /></Field>
           <Field label="About the shop" id="sh-about" className="sm:col-span-2"><textarea id="sh-about" rows={3} className="input h-auto py-2.5" value={f.shopAbout} onChange={set('shopAbout')} /></Field>

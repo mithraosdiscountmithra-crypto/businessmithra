@@ -6,6 +6,7 @@ import UpiPay from '../../components/UpiPay.jsx';
 import { hostShop } from '../../lib/hostShop.js';
 import { InstallButton } from '../../lib/install.jsx';
 import { payWithRazorpay } from '../../lib/razorpay.js';
+import { accent, autoAbout, autoTagline, emojiFor, heroArt, itemArt, tint } from '../../lib/shopTheme.js';
 import { addOrderToken, clearMe, getMe, getOrderTokens, getShopToken, setMe, setShopToken } from '../../lib/shopDevice.js';
 
 const CART_KEY = (slug) => `bm_cart_${slug}`;
@@ -67,7 +68,7 @@ function VariantChips({ it, value, onChange, color }) {
 
 const firstInStock = (it) => (it.variants.find((v) => v.inStock) || it.variants[0])?.id || null;
 
-function ItemCard({ it, cart, color, onAdd, onDec, onBook, onAsk, onOpen }) {
+function ItemCard({ it, cart, color, stype, onAdd, onDec, onBook, onAsk, onOpen }) {
   const [vSel, setVSel] = useState(() => firstInStock(it));
   const v = it.variants.find((x) => x.id === vSel) || null;
   const price = v ? v.price : it.price;
@@ -78,9 +79,9 @@ function ItemCard({ it, cart, color, onAdd, onDec, onBook, onAsk, onOpen }) {
   const img = it.images[0];
   const off = mrp && mrp > price ? Math.round(((mrp - price) / mrp) * 100) : 0;
   return (
-    <article className="bg-white rounded-2xl border border-gray-200 overflow-hidden flex flex-col">
+    <article className="bg-white rounded-2xl border border-gray-200 overflow-hidden flex flex-col shadow-sm hover:shadow-md transition-shadow">
       <button type="button" onClick={onOpen} className="relative aspect-square bg-gray-100 block w-full" aria-label={`View ${it.name}`}>
-        {img ? <img src={img} alt={it.name} loading="lazy" className="w-full h-full object-cover" /> : <span className="absolute inset-0 flex items-center justify-center text-4xl font-extrabold text-gray-300">{it.name.slice(0, 1)}</span>}
+        <img src={img || itemArt(it.name, it.category, stype, color)} alt={it.name} loading="lazy" className="w-full h-full object-cover" />
         {off > 0 && <span className="absolute top-2 left-2 text-xs font-extrabold bg-green-700 text-white px-2 py-1 rounded-lg">{off}% OFF</span>}
         {!it.inStock && <span className="absolute inset-0 bg-white/70 flex items-center justify-center font-bold text-gray-800">Out of stock</span>}
       </button>
@@ -448,6 +449,11 @@ export default function Storefront() {
   );
 
   const foodish = /restaurant|food|cafe|hotel|bakery|sweet|tiffin|mess|juice|cloud/i.test(shop.type || '');
+  // Vendor's own words first; otherwise professional text made from the business details.
+  const autoInfo = { name: shop.name, type: shop.type, city: shop.city, categories, allowDelivery: shop.allowDelivery, allowPickup: shop.allowPickup, allowTable: shop.allowTable, allowBooking: shop.allowBooking, onlinePay: shop.onlinePay };
+  const tagline = shop.tagline || autoTagline(autoInfo);
+  const about = shop.about || autoAbout(autoInfo);
+  const color2 = accent(color);
   const menuLabel = shop.allowBooking && !shop.allowPickup && !shop.allowDelivery ? 'Our Services' : foodish ? 'Our Menu' : 'Our Products';
   const dirUrl = shop.lat ? `https://www.google.com/maps/dir/?api=1&destination=${shop.lat},${shop.lng}` : shop.mapUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([shop.name, shop.address, shop.city].filter(Boolean).join(', '))}`;
 
@@ -472,7 +478,7 @@ export default function Storefront() {
           <div className="hidden md:flex items-center gap-6 ml-auto text-sm font-semibold text-gray-700">
             <a href="#menu" className="hover:text-black">{menuLabel}</a>
             {data.offers?.length > 0 && <a href="#offers" className="hover:text-black">Offers</a>}
-            {(shop.about || shop.gallery?.length > 0) && <a href="#about" className="hover:text-black">About</a>}
+            <a href="#about" className="hover:text-black">About</a>
             <a href="#contact" className="hover:text-black">Contact</a>
           </div>
           <div className="flex items-center gap-2 ml-auto md:ml-4">
@@ -484,12 +490,12 @@ export default function Storefront() {
 
       {/* ── Hero ── */}
       <header id="top" className="relative overflow-hidden">
-        <div className="absolute inset-0" style={shop.cover ? { backgroundImage: `url(${shop.cover})`, backgroundSize: 'cover', backgroundPosition: 'center' } : { background: `linear-gradient(135deg, ${color}, #111827)` }} aria-hidden="true" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/45 to-black/25" aria-hidden="true" />
+        <div className="absolute inset-0" style={{ backgroundImage: shop.cover ? `url(${shop.cover})` : heroArt(shop.type, color), backgroundSize: 'cover', backgroundPosition: 'center' }} aria-hidden="true" />
+        <div className={`absolute inset-0 ${shop.cover ? 'bg-gradient-to-t from-black/80 via-black/45 to-black/25' : 'bg-gradient-to-t from-black/45 via-black/10 to-transparent'}`} aria-hidden="true" />
         <div className="relative max-w-6xl mx-auto px-4 py-16 sm:py-24 text-white flex flex-col gap-4">
           {shop.logo && <img src={shop.logo} alt={`${shop.name} logo`} className="w-20 h-20 rounded-2xl object-cover border-4 border-white/90 shadow-lg" />}
-          <h1 className="text-4xl sm:text-5xl font-extrabold leading-tight max-w-2xl">{shop.name}</h1>
-          {shop.tagline && <p className="text-lg sm:text-xl text-white/90 max-w-2xl">{shop.tagline}</p>}
+          <h1 className="text-4xl sm:text-6xl font-extrabold leading-tight max-w-3xl drop-shadow-lg">{shop.name}</h1>
+          <p className="text-lg sm:text-xl text-white/95 max-w-2xl drop-shadow">{tagline}</p>
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-white/90">
             {shop.timings && <span>🕒 {shop.timings}</span>}
             {shop.city && <span>📍 {[shop.address, shop.city].filter(Boolean).join(', ')}</span>}
@@ -507,7 +513,7 @@ export default function Storefront() {
 
       {/* ── What we offer ── */}
       <div className="bg-white border-b border-gray-200">
-        <div className="max-w-6xl mx-auto px-4 py-4 grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+        <div className="max-w-6xl mx-auto px-4 py-5 grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
           {[
             shop.allowPickup && ['🥡', 'Takeaway', 'Order & pick up'],
             shop.allowDelivery && ['🚚', 'Home delivery', shop.deliveryFee ? `₹${shop.deliveryFee} delivery` : 'Free delivery'],
@@ -515,9 +521,9 @@ export default function Storefront() {
             shop.allowBooking && ['📅', 'Appointments', 'Book a slot'],
             shop.onlinePay && ['💳', 'Pay online', 'UPI · Cards'],
             shop.minOrder > 0 && ['🧾', 'Min. order', inr(shop.minOrder)],
-          ].filter(Boolean).slice(0, 4).map(([i, t, sub]) => (
-            <div key={t} className="flex items-center gap-3 rounded-xl bg-gray-50 p-3">
-              <span className="text-2xl" aria-hidden="true">{i}</span>
+          ].filter(Boolean).slice(0, 4).map(([i, t, sub], n) => (
+            <div key={t} className="flex items-center gap-3 rounded-2xl p-3" style={{ background: n % 2 ? tint(color, 0.08) : `color-mix(in srgb, ${color2} 12%, white)` }}>
+              <span className="w-11 h-11 rounded-xl flex items-center justify-center text-2xl bg-white shadow-sm shrink-0" aria-hidden="true">{i}</span>
               <span><b className="block">{t}</b><span className="text-xs text-gray-600">{sub}</span></span>
             </div>
           ))}
@@ -558,7 +564,10 @@ export default function Storefront() {
 
 
       <main id="menu" className="max-w-6xl mx-auto px-4 pt-8 flex flex-col gap-4 scroll-mt-16">
-        <h2 className="text-2xl sm:text-3xl font-extrabold">{menuLabel}</h2>
+        <div>
+          <h2 className="text-2xl sm:text-3xl font-extrabold">{menuLabel}</h2>
+          <span className="block h-1.5 w-20 rounded-full mt-2" style={{ background: `linear-gradient(90deg, ${color}, ${color2})` }} aria-hidden="true" />
+        </div>
         <div className="flex flex-col gap-3 sticky top-16 z-20 bg-[#F6F6F8] py-2">
           <label className="sr-only" htmlFor="shop-q">Search</label>
           <input id="shop-q" type="search" className="input bg-white" placeholder={`Search in ${shop.name}`} value={q} onChange={(e) => setQ(e.target.value)} />
@@ -566,7 +575,7 @@ export default function Storefront() {
             <div className="flex gap-2 overflow-x-auto -mx-4 px-4 pb-1">
               {['', ...categories].map((c) => (
                 <button key={c || 'all'} type="button" aria-pressed={cat === c} onClick={() => setCat(c)} className="h-9 px-4 rounded-full text-sm font-semibold whitespace-nowrap border" style={cat === c ? { background: color, color: '#fff', borderColor: color } : { background: '#fff', borderColor: '#E5E7EB' }}>
-                  {c || 'All'}
+                  {c ? `${emojiFor(c, shop.type)} ${c}` : '✨ All'}
                 </button>
               ))}
             </div>
@@ -576,7 +585,7 @@ export default function Storefront() {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             {shown.map((it) => (
               <ItemCard
-                key={it.id} it={it} cart={cart} color={color}
+                key={it.id} it={it} cart={cart} color={color} stype={shop.type}
                 onAdd={add} onDec={dec}
                 onBook={shop.allowBooking ? () => setSheet({ type: 'book', item: it }) : null}
                 onAsk={() => { setSent(false); setSheet({ type: 'ask', item: it }); }}
@@ -589,23 +598,37 @@ export default function Storefront() {
       </main>
 
       {/* ── About + gallery ── */}
-      {(shop.about || shop.gallery?.length > 0) && (
-        <section id="about" className="max-w-6xl mx-auto px-4 pt-14 scroll-mt-16">
-          <h2 className="text-2xl sm:text-3xl font-extrabold mb-4">About {shop.name}</h2>
-          {shop.about && <p className="text-base text-gray-700 leading-relaxed whitespace-pre-line max-w-3xl">{shop.about}</p>}
-          {shop.gallery?.length > 0 && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
-              {shop.gallery.map((src, i) => (
-                <img key={src} src={src} alt={`${shop.name} photo ${i + 1}`} loading="lazy" className={`w-full object-cover rounded-2xl ${i === 0 ? 'col-span-2 row-span-2 aspect-square' : 'aspect-square'}`} />
+      <div className="mt-14 py-12" style={{ background: `linear-gradient(135deg, ${tint(color, 0.1)}, color-mix(in srgb, ${color2} 14%, white))` }}>
+        <section id="about" className="max-w-6xl mx-auto px-4 scroll-mt-20 grid md:grid-cols-2 gap-8 items-center">
+          <div>
+            <p className="text-sm font-bold uppercase tracking-wider" style={{ color }}>About us</p>
+            <h2 className="text-2xl sm:text-3xl font-extrabold mt-1 mb-4">Welcome to {shop.name}</h2>
+            <p className="text-base text-gray-700 leading-relaxed whitespace-pre-line">{about}</p>
+            <div className="flex flex-wrap gap-2 mt-5">
+              {categories.slice(0, 6).map((c) => <span key={c} className="px-3 py-1.5 rounded-full bg-white text-sm font-semibold shadow-sm">{emojiFor(c, shop.type)} {c}</span>)}
+            </div>
+          </div>
+          {shop.gallery?.length > 0 ? (
+            <div className="grid grid-cols-3 gap-3">
+              {shop.gallery.slice(0, 7).map((src, i) => (
+                <img key={src} src={src} alt={`${shop.name} photo ${i + 1}`} loading="lazy" className={`w-full object-cover rounded-2xl shadow ${i === 0 ? 'col-span-2 row-span-2 aspect-square' : 'aspect-square'}`} />
               ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-3" aria-hidden="true">
+              {items.filter((i) => i.images[0]).slice(0, 5).map((i, n) => (
+                <img key={i.id} src={i.images[0]} alt="" loading="lazy" className={`w-full object-cover rounded-2xl shadow ${n === 0 ? 'col-span-2 row-span-2 aspect-square' : 'aspect-square'}`} />
+              ))}
+              {items.filter((i) => i.images[0]).length === 0 && <div className="col-span-3 aspect-[16/9] rounded-3xl shadow" style={{ backgroundImage: heroArt(shop.type, color), backgroundSize: 'cover' }} />}
             </div>
           )}
         </section>
-      )}
+      </div>
 
       {/* ── Contact ── */}
       <section id="contact" className="max-w-6xl mx-auto px-4 pt-14 scroll-mt-16">
-        <h2 className="text-2xl sm:text-3xl font-extrabold mb-4">Visit us</h2>
+        <p className="text-sm font-bold uppercase tracking-wider" style={{ color }}>Contact</p>
+        <h2 className="text-2xl sm:text-3xl font-extrabold mt-1 mb-4">Visit us</h2>
         <div className="grid md:grid-cols-2 gap-4">
           <div className="bg-white rounded-2xl border border-gray-200 p-5 flex flex-col gap-3">
             {(shop.address || shop.city) && <p className="flex gap-3"><span aria-hidden="true">📍</span><span>{[shop.address, shop.city, shop.state].filter(Boolean).join(', ')}</span></p>}
@@ -621,23 +644,23 @@ export default function Storefront() {
             <iframe title={`${shop.name} on map`} className="w-full h-64 md:h-full min-h-[16rem] rounded-2xl border border-gray-200" loading="lazy" referrerPolicy="no-referrer-when-downgrade"
               src={`https://maps.google.com/maps?q=${shop.lat},${shop.lng}&z=16&output=embed`} />
           ) : (
-            <div className="rounded-2xl min-h-[12rem] flex items-center justify-center text-center p-6 text-white" style={{ background: `linear-gradient(135deg, ${color}, #111827)` }}>
-              <p className="text-lg font-bold">{shop.tagline || `Welcome to ${shop.name}`}</p>
+            <div className="rounded-2xl min-h-[12rem] flex items-center justify-center text-center p-6 text-white" style={{ backgroundImage: heroArt(shop.type, color), backgroundSize: 'cover' }}>
+              <p className="text-xl font-extrabold drop-shadow">{tagline}</p>
             </div>
           )}
         </div>
       </section>
 
       {/* ── Footer ── */}
-      <footer className="mt-14 bg-gray-900 text-gray-300">
+      <footer className="mt-14 text-white/80" style={{ background: `linear-gradient(135deg, #111827, ${color})` }}>
         <div className="max-w-6xl mx-auto px-4 py-10 grid sm:grid-cols-3 gap-6 text-sm">
           <div>
             <p className="text-white text-lg font-extrabold">{shop.name}</p>
-            {shop.tagline && <p className="mt-1">{shop.tagline}</p>}
+            <p className="mt-1">{tagline}</p>
           </div>
           <div className="flex flex-col gap-1.5">
             <a href="#menu" className="hover:text-white">{menuLabel}</a>
-            {(shop.about || shop.gallery?.length > 0) && <a href="#about" className="hover:text-white">About</a>}
+            <a href="#about" className="hover:text-white">About</a>
             <a href="#contact" className="hover:text-white">Contact</a>
             {(me || getOrderTokens(slug).length > 0) && <button type="button" onClick={openMyOrders} className="text-left hover:text-white">My Orders</button>}
           </div>
