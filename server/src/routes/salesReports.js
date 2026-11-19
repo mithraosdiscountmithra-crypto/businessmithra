@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { h } from '../lib/route.js';
+import { perUnit } from '../lib/stock.js';
 import { dateOnly, istToday, num, parseRange, r2 } from '../lib/money.js';
 import { requireAuth, requirePermission } from '../middleware/auth.js';
 
@@ -100,9 +101,14 @@ router.get('/items', h(async (req, res) => {
   const [lines, returns, items] = await Promise.all([
     prisma.invoiceItem.findMany({ where: { invoice: live }, select: { itemId: true, variantId: true, name: true, qty: true, amount: true, invoice: { select: { subtotal: true, discount: true } } } }),
     prisma.creditNoteItem.findMany({ where: { creditNote: { businessId: b, date: { gte: r.gte, lt: r.lt } } }, select: { itemId: true, variantId: true, name: true, qty: true, amount: true } }),
-    prisma.item.findMany({ where: { businessId: b }, select: { id: true, name: true, category: true, costPrice: true } }),
+    prisma.item.findMany({ where: { businessId: b }, select: { id: true, name: true, category: true, costPrice: true, sharedStock: true, variants: true } }),
   ]);
   const byId = Object.fromEntries(items.map((i) => [i.id, i]));
+  const unitCost = (l) => {
+    const it = byId[l.itemId];
+    if (!it) return 0;
+    return num(it.costPrice) * (it.sharedStock && l.variantId ? perUnit(it, l.variantId) : 1);
+  };
   const rows = {};
   const row = (l) => {
     const key = l.itemId ? `${l.itemId}|${l.variantId || ''}` : `name:${l.name.toLowerCase()}`;
@@ -114,13 +120,13 @@ router.get('/items', h(async (req, res) => {
     const x = row(l);
     x.qty += num(l.qty);
     x.sales += num(l.amount) * f;
-    x.cost += num(l.qty) * num(byId[l.itemId]?.costPrice);
+    x.cost += num(l.qty) * unitCost(l);
   }
   for (const l of returns) {
     const x = row(l);
     x.qty -= num(l.qty);
     x.sales -= num(l.amount);
-    x.cost -= num(l.qty) * num(byId[l.itemId]?.costPrice);
+    x.cost -= num(l.qty) * unitCost(l);
   }
   const out = Object.values(rows).map((x) => ({ ...x, qty: Math.round(x.qty * 1000) / 1000, sales: r2(x.sales), cost: r2(x.cost), profit: x.hasCost ? r2(x.sales - x.cost) : null }))
     .sort((a, b2) => b2.sales - a.sales);

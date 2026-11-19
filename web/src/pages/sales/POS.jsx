@@ -246,7 +246,7 @@ export default function POS() {
             {sizeFor.variants.map((v) => (
               <button key={v.id} type="button" className="card p-3 text-left hover:border-brand" onClick={() => add(sizeFor, v)}>
                 <b>{v.name}</b><span className="block text-brand font-bold">{inr(withTax(Number(v.price), Number(sizeFor.taxRate)))}</span>
-                {sizeFor.trackStock && <span className="text-xs text-muted">Stock {Number(v.stock) || 0}</span>}
+                {sizeFor.trackStock && <span className="text-xs text-muted">{sizeFor.sharedStock ? `Stock ${Number(sizeFor.stock)} ${sizeFor.unit}` : `Stock ${Number(v.stock) || 0}`}</span>}
               </button>
             ))}
           </div>

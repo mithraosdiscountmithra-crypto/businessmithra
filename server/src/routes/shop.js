@@ -75,7 +75,7 @@ router.get('/:slug', h(async (req, res) => {
       id: it.id, name: it.name, type: it.type, unit: it.unit, description: it.description, category: it.category,
       images: it.images, inStock: it.inStock && (!it.trackStock || num(it.stock) > 0), price: priceWithTax(it), mrp: it.mrp ? num(it.mrp) : null,
       variants: (Array.isArray(it.variants) ? it.variants : []).map((v) => ({
-        id: v.id, name: v.name, inStock: v.inStock !== false && (!it.trackStock || num(v.stock) > 0),
+        id: v.id, name: v.name, inStock: v.inStock !== false && (!it.trackStock || (it.sharedStock ? num(it.stock) >= (num(v.per) || 1) : num(v.stock) > 0)),
         price: r2(num(v.price) * (1 + num(it.taxRate) / 100)), mrp: v.mrp ? num(v.mrp) : null,
       })),
     })),

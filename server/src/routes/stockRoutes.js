@@ -15,10 +15,10 @@ router.get('/', requirePermission('operations', 'view'), h(async (req, res) => {
   const rows = items.flatMap((it) => {
     const variants = Array.isArray(it.variants) ? it.variants : [];
     const low = num(it.lowStockAt);
-    if (variants.length) {
+    if (variants.length && !it.sharedStock) {
       return variants.map((v) => ({ itemId: it.id, variantId: v.id, name: `${it.name} (${v.name})`, unit: it.unit, stock: num(v.stock), costPrice: num(it.costPrice), price: num(v.price), low, category: it.category }));
     }
-    return [{ itemId: it.id, variantId: null, name: it.name, unit: it.unit, stock: num(it.stock), costPrice: num(it.costPrice), price: num(it.price), low, category: it.category }];
+    return [{ itemId: it.id, variantId: null, name: variants.length ? `${it.name} (${variants.map((v) => v.name).join(', ')})` : it.name, unit: it.unit, stock: num(it.stock), costPrice: num(it.costPrice), price: num(it.price), low, category: it.category }];
   }).map((r) => ({ ...r, value: r2(r.stock * r.costPrice), isLow: r.stock <= r.low }));
   res.json({
     rows,

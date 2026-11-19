@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { prisma, logActivity } from '../lib/prisma.js';
 import { h } from '../lib/route.js';
 import { computeDoc, dateOnly, invoiceStatus, lineSchema, num, parseRange, r2 } from '../lib/money.js';
-import { applyLines, reverseRef } from '../lib/stock.js';
+import { applyLines, perUnit, reverseRef } from '../lib/stock.js';
 import { HttpError, requireAuth, requirePermission } from '../middleware/auth.js';
 import { defaultAccountId, MODES } from './invoices.js';
 
@@ -94,7 +94,14 @@ router.post('/', requirePermission('operations', 'add'), h(async (req, res) => {
     // Bill: stock in + remember the latest cost price. Return: stock out.
     await applyLines(tx, { businessId: req.businessId, refType: 'purchase', refId: created.id, lines: c.lines, sign: d.kind === 'bill' ? 1 : -1, reason: d.kind === 'bill' ? 'purchase' : 'purchase_return', userId: req.user.id });
     if (d.kind === 'bill') {
-      for (const l of c.lines) if (l.itemId) await tx.item.updateMany({ where: { id: l.itemId, businessId: req.businessId }, data: { costPrice: l.rate } });
+      for (const l of c.lines) {
+        if (!l.itemId) continue;
+        const it = await tx.item.findFirst({ where: { id: l.itemId, businessId: req.businessId } });
+        if (!it) continue;
+        // Shared stock: cost is kept per unit (e.g. per kg), so a "500 g" line at ₹20 = ₹40 per kg.
+        const cost = it.sharedStock && l.variantId ? l.rate / perUnit(it, l.variantId) : l.rate;
+        await tx.item.update({ where: { id: it.id }, data: { costPrice: Math.round(cost * 100) / 100 } });
+      }
     }
     if (d.paidNow) await addMoney(tx, req, created, supplier, { ...d.paidNow, date: d.date });
     return created;

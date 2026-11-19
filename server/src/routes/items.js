@@ -33,8 +33,10 @@ const schema = z.object({
     mrp: z.coerce.number().min(0).optional().nullable().transform((v) => (v ? v : null)),
     inStock: z.boolean().default(true),
     stock: z.coerce.number().optional().nullable(),
+    per: z.coerce.number().min(0).optional().nullable(),
   })).max(20).default([]),
   trackStock: z.boolean().default(false),
+  sharedStock: z.boolean().default(false),
   lowStockAt: z.coerce.number().min(0).default(0),
   costPrice: z.coerce.number().min(0).default(0),
   barcode: s(40),
@@ -61,7 +63,7 @@ router.post('/', requirePermission('sales', 'add'), h(async (req, res) => {
   const item = await prisma.$transaction(async (tx) => {
     const created = await tx.item.create({ data: { ...d, stock: 0, businessId: req.businessId } });
     if (d.trackStock) {
-      if (d.variants.length) {
+      if (d.variants.length && !d.sharedStock) {
         for (const o of opening) if (o.qty) await moveStock(tx, { businessId: req.businessId, itemId: created.id, variantId: o.id, qty: o.qty, reason: 'opening', userId: req.user.id });
       } else if (openingStock) {
         await moveStock(tx, { businessId: req.businessId, itemId: created.id, qty: openingStock, reason: 'opening', userId: req.user.id });
@@ -83,11 +85,15 @@ router.put('/:id', requirePermission('sales', 'edit'), h(async (req, res) => {
   const item = await prisma.$transaction(async (tx) => {
     const u = await tx.item.update({ where: { id: ex.id }, data: d });
     // Turning tracking on for the first time: allow an opening quantity.
-    if (d.trackStock && !ex.trackStock && openingStock && !d.variants.length) {
+    const nowShared = d.sharedStock || !d.variants.length;
+    const wasShared = ex.sharedStock || !(Array.isArray(ex.variants) && ex.variants.length);
+    if (d.trackStock && openingStock && nowShared && (!ex.trackStock || !wasShared)) {
+      // Opening / starting stock for a single total (e.g. 20 kg).
+      if (!wasShared) await tx.item.update({ where: { id: ex.id }, data: { stock: 0 } });
       await moveStock(tx, { businessId: req.businessId, itemId: ex.id, qty: openingStock, reason: 'opening', userId: req.user.id });
       return tx.item.findUnique({ where: { id: ex.id } });
     }
-    if (d.variants.length) return tx.item.update({ where: { id: ex.id }, data: { stock: d.variants.reduce((a, v) => a + (Number(v.stock) || 0), 0) } });
+    if (d.variants.length && !d.sharedStock) return tx.item.update({ where: { id: ex.id }, data: { stock: d.variants.reduce((a, v) => a + (Number(v.stock) || 0), 0) } });
     return u;
   });
   res.json({ item });

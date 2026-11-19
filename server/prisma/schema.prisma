@@ -265,6 +265,7 @@ model Item {
   inStock     Boolean  @default(true)
   // Stock (Operations)
   trackStock  Boolean  @default(false)
+  sharedStock Boolean  @default(false) // sizes share one stock in the item unit (e.g. 20 kg; 250 g order takes 0.25 kg)
   stock       Decimal  @default(0) @db.Decimal(12, 3)
   lowStockAt  Decimal  @default(0) @db.Decimal(12, 3)
   costPrice   Decimal  @default(0) @db.Decimal(12, 2)

@@ -13,10 +13,13 @@ function ItemForm({ item, onClose, onSaved }) {
     mrp: item?.mrp ?? '', description: item?.description || '', category: item?.category || '',
     images: item?.images || [], showInShop: item?.showInShop ?? true, inStock: item?.inStock ?? true,
     variants: (item?.variants || []).map((v) => ({ ...v, mrp: v.mrp ?? '' })),
-    trackStock: item?.trackStock ?? false, openingStock: '', lowStockAt: Number(item?.lowStockAt) || '',
+    trackStock: item?.trackStock ?? false, sharedStock: item?.sharedStock ?? false, openingStock: '', lowStockAt: Number(item?.lowStockAt) || '',
     costPrice: Number(item?.costPrice) || '', barcode: item?.barcode || '',
   });
   const firstTrack = !item?.trackStock;
+  // Shared stock: one total (e.g. 20 kg) for all sizes. Needs a starting total when first turned on.
+  const askTotal = f.trackStock && (f.variants.length === 0 || f.sharedStock) && (firstTrack || (f.sharedStock && !item?.sharedStock));
+  const perGuess = (name) => guessPer(name, f.unit);
   const vid = () => Math.random().toString(36).slice(2, 10);
   const setVariants = (variants) => setF((x) => ({ ...x, variants }));
   const setV = (id, patch) => setVariants(f.variants.map((v) => (v.id === id ? { ...v, ...patch } : v)));
@@ -31,7 +34,7 @@ function ItemForm({ item, onClose, onSaved }) {
     try {
       await api(item ? `/items/${item.id}` : '/items', { method: item ? 'PUT' : 'POST', body: {
         ...f, price: Number(f.price || 0), taxRate: Number(f.taxRate), mrp: f.mrp === '' ? null : Number(f.mrp), active: true,
-        variants: f.variants.filter((v) => v.name.trim()).map((v) => ({ ...v, price: Number(v.price || 0), mrp: v.mrp === '' ? null : Number(v.mrp), stock: Number(v.stock) || 0 })),
+        variants: f.variants.filter((v) => v.name.trim()).map((v) => ({ ...v, price: Number(v.price || 0), mrp: v.mrp === '' ? null : Number(v.mrp), stock: Number(v.stock) || 0, per: v.per === '' || v.per == null ? null : Number(v.per) })),
         openingStock: Number(f.openingStock) || 0, lowStockAt: Number(f.lowStockAt) || 0, costPrice: Number(f.costPrice) || 0,
       } });
       onSaved();
@@ -93,8 +96,26 @@ function ItemForm({ item, onClose, onSaved }) {
           <p className="text-xs text-muted -mt-2">On chesthe bill / order ayinappudu stock auto ga taggutundi, purchase lo perugutundi. Stock 0 ayithe shop lo "Out of stock" chupistundi.</p>
           {f.trackStock && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {firstTrack && !f.variants.length && <Field label={`Opening stock (${f.unit})`} id="i-open" hint="Ippudu shop lo entha undi"><input id="i-open" type="number" min="0" step="any" className="input" value={f.openingStock} onChange={set('openingStock')} /></Field>}
-              {firstTrack && !item && f.variants.length > 0 && (
+              {f.variants.length > 0 && (
+                <fieldset className="sm:col-span-2 flex flex-col gap-2 rounded-xl border border-line p-3">
+                  <legend className="text-sm font-semibold px-1">Sizes ki stock ela?</legend>
+                  <label className="flex items-start gap-2 text-sm"><input type="radio" name="stockmode" className="w-5 h-5 mt-0.5 accent-brand" checked={f.sharedStock} onChange={() => setF((x) => ({ ...x, sharedStock: true, variants: x.variants.map((v) => ({ ...v, per: v.per || perGuess(v.name) })) }))} />
+                    <span><b>Okate total stock ({f.unit} lo)</b> – e.g. 20 {f.unit} undi; 250 g order ki 0.25 {f.unit} taggutundi. <span className="text-muted">Vegetables, rice, oil laantivi</span></span></label>
+                  <label className="flex items-start gap-2 text-sm"><input type="radio" name="stockmode" className="w-5 h-5 mt-0.5 accent-brand" checked={!f.sharedStock} onChange={() => setF((x) => ({ ...x, sharedStock: false }))} />
+                    <span><b>Prati size ki veru stock</b> – ready packets (e.g. 1 kg packets 10, 500 g packets 20) / clothes sizes</span></label>
+                  {f.sharedStock && (
+                    <div className="flex flex-col gap-2 pt-1">
+                      <span className="text-xs text-muted">Okko size entha {f.unit}? (peru nunchi auto ga nimpam, check cheyyandi)</span>
+                      {f.variants.filter((v) => v.name.trim()).map((v) => (
+                        <label key={v.id} className="flex items-center gap-3 text-sm"><span className="w-28 font-semibold">{v.name}</span> =
+                          <input type="number" min="0" step="any" aria-label={`${v.name} in ${f.unit}`} className="input h-10 w-28" value={v.per ?? ''} onChange={(e) => setV(v.id, { per: e.target.value })} /> {f.unit}</label>
+                      ))}
+                    </div>
+                  )}
+                </fieldset>
+              )}
+              {askTotal && <Field label={`${firstTrack ? 'Opening' : 'Ippati'} total stock (${f.unit})`} id="i-open" hint={`Ippudu shop lo motham entha ${f.unit} undi`}><input id="i-open" type="number" min="0" step="any" className="input" value={f.openingStock} onChange={set('openingStock')} /></Field>}
+              {firstTrack && !item && f.variants.length > 0 && !f.sharedStock && (
                 <div className="sm:col-span-2 flex flex-col gap-2">
                   <span className="text-sm font-semibold">Opening stock – prati size ki</span>
                   {f.variants.filter((v) => v.name.trim()).map((v) => (
@@ -103,7 +124,7 @@ function ItemForm({ item, onClose, onSaved }) {
                   ))}
                 </div>
               )}
-              {!firstTrack && <p className="sm:col-span-2 text-sm bg-gray-50 rounded-lg p-3">Current stock: <b>{f.variants.length ? f.variants.map((v) => `${v.name}: ${Number(v.stock) || 0}`).join(' · ') : `${Number(item.stock)} ${item.unit}`}</b><span className="block text-xs text-muted">Stock marchali ante Operations → Stock lo "Adjust" vaadandi.</span></p>}
+              {!firstTrack && !askTotal && <p className="sm:col-span-2 text-sm bg-gray-50 rounded-lg p-3">Current stock: <b>{item.sharedStock ? `${Number(item.stock)} ${item.unit}` : f.variants.length ? f.variants.map((v) => `${v.name}: ${Number(v.stock) || 0}`).join(' · ') : `${Number(item.stock)} ${item.unit}`}</b><span className="block text-xs text-muted">Stock marchali ante Operations → Stock lo "Adjust" vaadandi.</span></p>}
               <Field label="Low stock alert at" id="i-low" hint="Intha kanna takkuva ayithe alert"><input id="i-low" type="number" min="0" step="any" className="input" value={f.lowStockAt} onChange={set('lowStockAt')} /></Field>
               <Field label="Cost price ₹ (konna dhara)" id="i-cost" hint="Profit report kosam; purchase bill tho auto update"><input id="i-cost" type="number" min="0" step="0.01" className="input" value={f.costPrice} onChange={set('costPrice')} /></Field>
             </div>
@@ -123,6 +144,20 @@ function ItemForm({ item, onClose, onSaved }) {
       </form>
     </Modal>
   );
+}
+
+// "250 g" with unit kg → 0.25, "1 kg" → 1, "500 ml" with unit ltr → 0.5, "2 pcs" → 2.
+function guessPer(name, unit) {
+  const m = /([\d.]+)\s*(kg|kgs|g|gm|gms|gram|grams|l|ltr|litre|liter|ml|pcs|pc|piece|pieces|dozen|nos)?/i.exec(String(name || '').replace(',', '.'));
+  if (!m) return '';
+  const n = Number(m[1]);
+  const u = (m[2] || '').toLowerCase();
+  const base = String(unit || '').toLowerCase();
+  if (/^(g|gm|gms|gram|grams)$/.test(u) && /kg/.test(base)) return n / 1000;
+  if (u === 'ml' && /^l|ltr|lit/.test(base)) return n / 1000;
+  if (/^(kg|kgs)$/.test(u) && /^(g|gm)/.test(base)) return n * 1000;
+  if (u === 'dozen' && /pc|nos|piece/.test(base)) return n * 12;
+  return n;
 }
 
 export default function Items() {
@@ -167,7 +202,7 @@ export default function Items() {
                     <div className="flex items-center gap-3">
                       {it.images?.[0] ? <img src={it.images[0]} alt="" className="w-11 h-11 rounded-lg object-cover border border-line" /> : <span className="w-11 h-11 rounded-lg bg-gray-100 shrink-0" aria-hidden="true" />}
                       <div><span className="font-semibold">{it.name}</span>
-                        <span className="block text-xs text-muted">{[it.category, it.sku, it.showInShop ? 'In shop' : 'Not in shop', it.inStock ? '' : 'Out of stock', it.trackStock ? `Stock: ${Number(it.stock)}` : ''].filter(Boolean).join(' · ')}</span></div>
+                        <span className="block text-xs text-muted">{[it.category, it.sku, it.showInShop ? 'In shop' : 'Not in shop', it.inStock ? '' : 'Out of stock', it.trackStock ? `Stock: ${Number(it.stock)}${it.sharedStock ? ` ${it.unit}` : ''}` : ''].filter(Boolean).join(' · ')}</span></div>
                     </div>
                   </td>
                   <td className="p-3 capitalize">{it.type}</td>
