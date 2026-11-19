@@ -99,10 +99,16 @@ function ItemForm({ item, onClose, onSaved }) {
               {f.variants.length > 0 && (
                 <fieldset className="sm:col-span-2 flex flex-col gap-2 rounded-xl border border-line p-3">
                   <legend className="text-sm font-semibold px-1">Sizes ki stock ela?</legend>
-                  <label className="flex items-start gap-2 text-sm"><input type="radio" name="stockmode" className="w-5 h-5 mt-0.5 accent-brand" checked={f.sharedStock} onChange={() => setF((x) => ({ ...x, sharedStock: true, variants: x.variants.map((v) => ({ ...v, per: v.per || perGuess(v.name) })) }))} />
+                  <label className="flex items-start gap-2 text-sm"><input type="radio" name="stockmode" className="w-5 h-5 mt-0.5 accent-brand" checked={f.sharedStock} onChange={() => setF((x) => {
+                    // Sizes like "250 g / 1 kg" → stock in kg; "500 ml / 1 L" → stock in ltr.
+                    const names = x.variants.map((v) => v.name).join(' ');
+                    const unit = ['kg', 'g', 'ltr'].includes(x.unit) ? x.unit : /\d\s*(kg|g|gm|gms|grams?)\b/i.test(names) ? 'kg' : /\d\s*(ml|l|ltr|litres?)\b/i.test(names) ? 'ltr' : x.unit;
+                    return { ...x, unit, sharedStock: true, variants: x.variants.map((v) => ({ ...v, per: guessPer(v.name, unit) })) };
+                  })} />
                     <span><b>Okate total stock ({f.unit} lo)</b> – e.g. 20 {f.unit} undi; 250 g order ki 0.25 {f.unit} taggutundi. <span className="text-muted">Vegetables, rice, oil laantivi</span></span></label>
                   <label className="flex items-start gap-2 text-sm"><input type="radio" name="stockmode" className="w-5 h-5 mt-0.5 accent-brand" checked={!f.sharedStock} onChange={() => setF((x) => ({ ...x, sharedStock: false }))} />
                     <span><b>Prati size ki veru stock</b> – ready packets (e.g. 1 kg packets 10, 500 g packets 20) / clothes sizes</span></label>
+                  {f.sharedStock && !['kg', 'g', 'ltr'].includes(f.unit) && <p className="text-xs font-semibold text-amber-800 bg-amber-50 rounded-lg p-2">Paina "Unit" lo <b>kg</b> (leda ltr) select cheyyandi – appude stock kg lo untundi.</p>}
                   {f.sharedStock && (
                     <div className="flex flex-col gap-2 pt-1">
                       <span className="text-xs text-muted">Okko size entha {f.unit}? (peru nunchi auto ga nimpam, check cheyyandi)</span>
