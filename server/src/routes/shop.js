@@ -15,6 +15,7 @@ import { sendTemplate } from '../lib/aisensy.js';
 import { checkCoupon } from '../lib/coupons.js';
 import { capturedPayment, createOrder, shopKeys, validSignature } from '../lib/razorpay.js';
 import { markOrderPaidOnline } from '../lib/shopPay.js';
+import { logoIcon } from '../lib/shopIcon.js';
 
 const router = Router();
 
@@ -462,7 +463,12 @@ router.get('/:slug/manifest.webmanifest', h(async (req, res) => {
   const b = await prisma.business.findUnique({ where: { slug: String(req.params.slug).toLowerCase() } });
   if (!b || !b.shopEnabled) throw new HttpError(404, 'Shop not found');
   const start = req.query.own ? '/' : `/s/${b.slug}`;
-  const icons = [
+  const own = logoIcon(b.shopLogo, 192);
+  const icons = own ? [
+    { src: own, sizes: '192x192', type: 'image/png', purpose: 'any' },
+    { src: logoIcon(b.shopLogo, 512), sizes: '512x512', type: 'image/png', purpose: 'any' },
+    { src: logoIcon(b.shopLogo, 512), sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+  ] : [
     { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
     { src: '/icon-512.png', sizes: '512x512', type: 'image/png' },
   ];

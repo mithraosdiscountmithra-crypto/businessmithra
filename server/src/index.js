@@ -34,6 +34,7 @@ import hrRoutes from './routes/hr.js';
 import { validWebhook } from './lib/razorpay.js';
 import { markOrderPaidOnline } from './lib/shopPay.js';
 import { activateRequest } from './lib/subscription.js';
+import { logoIcon } from './lib/shopIcon.js';
 import { Prisma } from '@prisma/client';
 import { prisma } from './lib/prisma.js';
 import { shopForHost } from './lib/domains.js';
@@ -192,6 +193,12 @@ if (fs.existsSync(webDist)) {
           `<script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\\u003c')}</script>`,
         ].join('\n    ');
         html = html.replace(/<title>[\s\S]*?<\/title>/, head);
+        // Home-screen icon (iPhone) and browser tab icon = the shop's logo, with the shop's name.
+        const icon180 = logoIcon(b.shopLogo, 180);
+        if (icon180) {
+          html = html.replace('href="/apple-touch-icon.png"', `href="${esc(icon180)}"`).replace('<link rel="icon" type="image/png" href="/icon-192.png" />', `<link rel="icon" type="image/png" href="${esc(logoIcon(b.shopLogo, 64))}" />`);
+        }
+        html = html.replace('</head>', `<meta name="apple-mobile-web-app-title" content="${esc(b.name.slice(0, 30))}" />\n    <meta name="application-name" content="${esc(b.name.slice(0, 30))}" />\n  </head>`);
       }
     } catch (e) {
       console.error('shop meta failed', e.message);
